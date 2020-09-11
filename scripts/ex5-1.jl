@@ -2,12 +2,13 @@ using DrWatson
 using LinearAlgebra
 using Distributions
 using Plots
+plotlyjs()
 using StaticArrays
 include(srcdir("kf.jl"))
 
-global const dt = 0.005
+global const dt = 0.01
 global const g = 9.81
-global const seqlen = 1000
+global const seqlen = 500
 
 function ex5_1()
     function linearised_pendulum(x)
@@ -24,7 +25,7 @@ function ex5_1()
 
     Q = [qc * dt^3 / 3 qc * dt^2 / 2; qc * dt^2 / 2 qc * dt]
 
-    R = 0.01
+    R = 0.3
 
 
     x = zeros(2, seqlen)
@@ -64,7 +65,8 @@ op = ex5_1()
 x = op[:x]
 y = op[:y]
 km = op[:kl_m]
+ts = collect(dt .* (1:seqlen))
 
-plot(1:seqlen, x[1, :])
-plot!(1:seqlen, y)
-plot!(1:seqlen, km[1, :])
+plot(ts, x[1, :])
+plot!(ts, y)
+plot!(ts, km[1, :])

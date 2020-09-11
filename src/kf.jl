@@ -121,7 +121,7 @@ function exkf_update(x::Vector{Float64}, P::Matrix{Float64}, y::Vector{Float64},
     H_jac = ForwardDiff.jacobian(H, x)
     v = y - H(x)
     IM = H(x)
-    IS = H_jac * P * H_jac'
+    IS = H_jac * P * H_jac' + R
     K = P * H_jac' / IS
     xp = x + K * v
     Pp = P - K * IS * K'
