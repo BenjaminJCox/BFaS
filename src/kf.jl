@@ -2,6 +2,7 @@
 
 using LinearAlgebra
 using Distributions
+using ForwardDiff
 
 ##exact kalman filter
 
@@ -87,4 +88,20 @@ function threeDVAR_update(x::Vector{Float64}, P::Matrix{Float64}, y::Vector{Floa
     xp = x + K * (y - IM)
     Pp = P
     return (xp, Pp, K, IM, IS)
+end
+
+function exkf_predict(x::Vector{Float64}, P::Matrix, psi = x -> x, Q = zeros(size(x, 1), size(x, 1)))
+    xp = psi(x)
+    jac = ForwardDiff.jacobian(psi, x)
+    Pp = jac * P * jac' + Q
+    return (xp, Pp)
+end
+
+function exkf_update(x::Vector{Float64}, P::Matrix{Float64}, y::Vector{Float64}, H::Matrix{Float64}, R::Matrix{Float64})
+    IM = H*x
+    IS = R + H*P*H' + R
+    K = P * H' / IS
+    xp = x + K * (y-IM)
+    Pp = P - K * H * P
+    return(xp, Pp, K, IM, IS)
 end

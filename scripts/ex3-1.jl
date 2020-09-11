@@ -1,6 +1,7 @@
 using DrWatson
 using Distributions
 using Plots
+using StaticArrays
 include(srcdir("kf.jl"))
 
 function ex3_1()
@@ -34,9 +35,13 @@ function ex3_1()
 
     kl_m = zeros(2, seqlen)
 
+    psi(x) = A * x
+
     for k = 1:100
-        m, P = kf_predict(m, P, A, Q)
-        m, P = kf_update(m, P, [y[k]], H, hcat(R))
+        # m, P = kf_predict(m, P, A, Q)
+        # m, P = kf_update(m, P, [y[k]], H, hcat(R))
+        m, P = exkf_predict(m, P, psi, Q)
+        m, P = exkf_update(m, P, [y[k]], H, hcat(R))
         kl_m[:, k] = m
     end
     return @dict x y kl_m
