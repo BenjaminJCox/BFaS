@@ -1,2 +1,1 @@
-This is an awesome new scientific project that uses `DrWatson`!
-
+Working through "Bayesian Filtering and Smoothing" and implementing some of it in Julia (from the original MATLAB code)
