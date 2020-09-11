@@ -52,6 +52,6 @@ x = op[:x]
 y = op[:y]
 km = op[:kl_m]
 
-plot(1:100, x[1,:])
+plot(1:100, x[1, :])
 plot!(1:100, y)
-plot!(1:100, km[1,:])
+plot!(1:100, km[1, :])

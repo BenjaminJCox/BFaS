@@ -54,16 +54,22 @@ LH - Predictive likelihood of measurement
 =#
 
 function kf_update(x::Vector{Float64}, P::Matrix{Float64}, y::Vector{Float64}, H::Matrix{Float64}, R::Matrix{Float64})
-    IM = H*x
-    IS = R+H*P*H'
-    K = P*H'/IS
-    xp = x + K * (y-IM)
+    IM = H * x
+    IS = R + H * P * H'
+    K = P * H' / IS
+    xp = x + K * (y - IM)
     Pp = P - K * IS * K'
     LH = pdf(MvNormal(IM, IS), y)
     return (xp, Pp, K, IM, IS, LH)
 end
 
 ##approximate gaussian filters
+#=
+Inputs remain the same except@
+psi: function mapping prior mean to model mean
+
+Output no longer has predictive likelihood as this is not meaningful for approximate filters
+=#
 
 function threeDVAR_predict(x::Vector{Float64}, P::Matrix, psi = x -> x, Q = zeros(size(x, 1), size(x, 1)), B = [], u = [])
     if (isempty(B) && !isempty(u))
@@ -82,13 +88,18 @@ function threeDVAR_predict(x::Vector{Float64}, P::Matrix, psi = x -> x, Q = zero
 end
 
 function threeDVAR_update(x::Vector{Float64}, P::Matrix{Float64}, y::Vector{Float64}, H::Matrix{Float64}, R::Matrix{Float64})
-    IM = H*x
+    IM = H * x
     IS = H * P * H' + R
     K = P * H' / IS
     xp = x + K * (y - IM)
     Pp = P
     return (xp, Pp, K, IM, IS)
 end
+
+#=
+Because Julia is awesome we can take gradients of very general code, meaning that the extended Kalman filter remains useful for a rather
+long time in this context
+=#
 
 function exkf_predict(x::Vector{Float64}, P::Matrix, psi = x -> x, Q = zeros(size(x, 1), size(x, 1)))
     xp = psi(x)
@@ -98,10 +109,21 @@ function exkf_predict(x::Vector{Float64}, P::Matrix, psi = x -> x, Q = zeros(siz
 end
 
 function exkf_update(x::Vector{Float64}, P::Matrix{Float64}, y::Vector{Float64}, H::Matrix{Float64}, R::Matrix{Float64})
-    IM = H*x
-    IS = R + H*P*H' + R
+    IM = H * x
+    IS = R + H * P * H' + R
     K = P * H' / IS
-    xp = x + K * (y-IM)
+    xp = x + K * (y - IM)
     Pp = P - K * H * P
-    return(xp, Pp, K, IM, IS)
+    return (xp, Pp, K, IM, IS)
+end
+
+function exkf_update(x::Vector{Float64}, P::Matrix{Float64}, y::Vector{Float64}, H, R::Matrix{Float64})
+    H_jac = ForwardDiff.jacobian(H, x)
+    v = y - H(x)
+    IM = H(x)
+    IS = H_jac * P * H_jac'
+    K = P * H_jac' / IS
+    xp = x + K * v
+    Pp = P - K * IS * K'
+    return (xp, Pp, K, IM, IS)
 end
