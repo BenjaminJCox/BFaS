@@ -3,6 +3,8 @@
 using LinearAlgebra
 using Distributions
 
+##exact kalman filter
+
 #=
 Input
 X - Nx1 state mean of previous step
@@ -58,4 +60,31 @@ function kf_update(x::Vector{Float64}, P::Matrix{Float64}, y::Vector{Float64}, H
     Pp = P - K * IS * K'
     LH = pdf(MvNormal(IM, IS), y)
     return (xp, Pp, K, IM, IS, LH)
+end
+
+##approximate gaussian filters
+
+function threeDVAR_predict(x::Vector{Float64}, P::Matrix, psi = x -> x, Q = zeros(size(x, 1), size(x, 1)), B = [], u = [])
+    if (isempty(B) && !isempty(u))
+        B = zeros(size(x, 1), size(u, 1))
+        B[diagind(B)] .= 1.0
+    end
+
+    if isempty(u)
+        xp = psi(x)
+        Pp = P
+    else
+        xp = psi(x) + B * u
+        Pp = P
+    end
+    return (xp, Pp)
+end
+
+function threeDVAR_update(x::Vector{Float64}, P::Matrix{Float64}, y::Vector{Float64}, H::Matrix{Float64}, R::Matrix{Float64})
+    IM = H*x
+    IS = H * P * H' + R
+    K = P * H' / IS
+    xp = x + K * (y - IM)
+    Pp = P
+    return (xp, Pp, K, IM, IS)
 end
