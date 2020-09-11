@@ -1,0 +1,52 @@
+using DrWatson
+using Distributions
+using Plots
+include(srcdir("kf.jl"))
+
+function ex3_1()
+
+
+    A = [1.0 1.0; 0.0 1.0]
+    H = [1.0 0.0]
+    Q = [1.0 / 10^2 0.0; 0.0 1.0^2]
+    R = [10.0^2]
+
+    m0 = rand(MvNormal([0.0, 0.0], [1.0 0.0; 0.0 1.0]))
+
+    seqlen = 100
+
+    x = zeros(2, seqlen)
+    y = zeros(seqlen)
+
+    process_rand = MvNormal([0.0, 0.0], Q)
+    obs_rand = Normal(0.0, sqrt(R[1]))
+
+    x[:, 1] = m0
+    y[1] = x[1, 1] + rand(obs_rand)
+
+    for k = 2:seqlen
+        x[:, k] = A * x[:, k-1] + rand(process_rand)
+        y[k] = (H*x[:, k])[1] + rand(obs_rand)
+    end
+
+    m = [0.0; 0.0]
+    P = Matrix{Float64}(I(2))
+
+    kl_m = zeros(2, seqlen)
+
+    for k = 1:100
+        m, P = kf_predict(m, P, A, Q)
+        m, P = kf_update(m, P, [y[k]], H, hcat(R))
+        kl_m[:, k] = m
+    end
+    return @dict x y kl_m
+end
+
+op = ex3_1()
+x = op[:x]
+y = op[:y]
+km = op[:kl_m]
+
+plot(1:100, x[1,:])
+plot!(1:100, y)
+plot!(1:100, km[1,:])
