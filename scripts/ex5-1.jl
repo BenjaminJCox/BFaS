@@ -3,7 +3,7 @@ using LinearAlgebra
 using Distributions
 using Plots
 # plotlyjs()
-using StaticArrays
+
 include(srcdir("kf.jl"))
 
 global const dt = 0.01
@@ -21,7 +21,7 @@ function ex5_1()
         return [yk]
     end
 
-    qc = 0.000001
+    qc = 0.001
 
     Q = [qc * dt^3 / 3 qc * dt^2 / 2; qc * dt^2 / 2 qc * dt]
 

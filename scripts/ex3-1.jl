@@ -1,7 +1,7 @@
 using DrWatson
 using Distributions
 using Plots
-using StaticArrays
+
 include(srcdir("kf.jl"))
 
 function ex3_1()
