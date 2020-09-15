@@ -2,7 +2,7 @@ using DrWatson
 using LinearAlgebra
 using Distributions
 using Plots
-plotlyjs()
+# plotlyjs()
 using StaticArrays
 include(srcdir("kf.jl"))
 
@@ -21,7 +21,7 @@ function ex5_1()
         return [yk]
     end
 
-    qc = 0.1
+    qc = 0.000001
 
     Q = [qc * dt^3 / 3 qc * dt^2 / 2; qc * dt^2 / 2 qc * dt]
 
@@ -31,9 +31,9 @@ function ex5_1()
     x = zeros(2, seqlen)
     y = zeros(seqlen)
 
-    m0 = Vector{Float64}([1., 1.])
+    m0 = Vector{Float64}([0.5, 0.])
 
-    process_rand = MvNormal([0.0, 0.0], Q)
+    process_rand = MvNormal(Q)
     obs_rand = Normal(0.0, R)
 
     x[:, 1] = m0
@@ -53,8 +53,10 @@ function ex5_1()
     for k = 1:seqlen
         # m, P = kf_predict(m, P, A, Q)
         # m, P = kf_update(m, P, [y[k]], H, hcat(R))
-        m, P = exkf_predict(m, P, linearised_pendulum, Q)
-        m, P = exkf_update(m, P, [y[k]], obs_func, hcat(R))
+        # m, P = exkf_predict(m, P, linearised_pendulum, Q)
+        # m, P = exkf_update(m, P, [y[k]], obs_func, hcat(R))
+        m, P = ukf_predict(m, P, linearised_pendulum, Q)
+        m, P = ukf_update(m, P, [y[k]], obs_func, hcat(R))
         kl_m[:, k] = m
     end
     return @dict x y kl_m
@@ -68,5 +70,5 @@ km = op[:kl_m]
 ts = collect(dt .* (1:seqlen))
 
 plot(ts, x[1, :])
-plot!(ts, y)
+plot!(ts, y, st = :scatter)
 plot!(ts, km[1, :])

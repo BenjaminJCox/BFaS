@@ -2,6 +2,8 @@
 
 using LinearAlgebra
 using Distributions
+
+#calculating jacobians and hessians
 using ForwardDiff
 
 ##exact kalman filter
@@ -72,19 +74,17 @@ Output no longer has predictive likelihood as this is not meaningful for approxi
 =#
 
 #=
-Input:
-x - Nx1 state mean of previous step
+Input
+X - Nx1 state mean of previous step
 P - NxN state covariance estimate of pervious step
-y - Dx1 Measurement vector
-H - Observation Matrix
-R - Measurement noise covariance
+psi - Transition function of discrete model
+Q - Process noise of discrete model
+B - Input effect matrix
+U - Constant input
 
-Output:
-x - Updated State Mean
-P - Updated State Covariance
-K - Kalman Gain
-IM - Predictive mean of y
-IS - Covariance of predictive mean of y
+Output
+X - Predicted state mean
+P - Predicted state covariance
 =#
 
 function threeDVAR_predict(x::Vector{Float64}, P::Matrix, psi = x -> x, Q = zeros(size(x, 1), size(x, 1)), B = [], u = [])
@@ -103,22 +103,6 @@ function threeDVAR_predict(x::Vector{Float64}, P::Matrix, psi = x -> x, Q = zero
     return (xp, Pp)
 end
 
-function threeDVAR_update(x::Vector{Float64}, P::Matrix{Float64}, y::Vector{Float64}, H::Matrix{Float64}, R::Matrix{Float64})
-    IM = H * x
-    IS = H * P * H' + R
-    K = P * H' / IS
-    xp = x + K * (y - IM)
-    Pp = P
-    return (xp, Pp, K, IM, IS)
-end
-
-#=
-Because Julia is awesome we can take gradients of very general code, meaning that the extended Kalman filter remains useful for a rather
-long time in this context
-
-todo: store jacobian information so that calculation is MUCH MUCH faster, should be ok tbh but not a priority
-=#
-
 #=
 Input:
 x - Nx1 state mean of previous step
@@ -135,12 +119,58 @@ IM - Predictive mean of y
 IS - Covariance of predictive mean of y
 =#
 
+function threeDVAR_update(x::Vector{Float64}, P::Matrix{Float64}, y::Vector{Float64}, H::Matrix{Float64}, R::Matrix{Float64})
+    IM = H * x
+    IS = H * P * H' + R
+    K = P * H' / IS
+    xp = x + K * (y - IM)
+    Pp = P
+    return (xp, Pp, K, IM, IS)
+end
+##
+#=
+Because Julia is awesome we can take gradients of very general code, meaning that the extended Kalman filter remains useful for a rather
+long time in this context
+
+todo: store jacobian information so that calculation is MUCH MUCH faster, should be ok tbh but not a priority
+=#
+
+#=
+Input
+X - Nx1 state mean of previous step
+P - NxN state covariance estimate of pervious step
+psi - Transition function of discrete model
+Q - Process noise of discrete model
+B - Input effect matrix
+U - Constant input
+
+Output
+X - Predicted state mean
+P - Predicted state covariance
+=#
+
 function exkf_predict(x::Vector{Float64}, P::Matrix, psi = x -> x, Q = zeros(size(x, 1), size(x, 1)))
     xp = psi(x)
     jac = ForwardDiff.jacobian(psi, x)
     Pp = jac * P * jac' + Q
     return (xp, Pp)
 end
+
+#=
+Input:
+x - Nx1 state mean of previous step
+P - NxN state covariance estimate of pervious step
+y - Dx1 Measurement vector
+H - Observation Matrix/function
+R - Measurement noise covariance
+
+Output:
+x - Updated State Mean
+P - Updated State Covariance
+K - Kalman Gain
+IM - Predictive mean of y
+IS - Covariance of predictive mean of y
+=#
 
 function exkf_update(x::Vector{Float64}, P::Matrix{Float64}, y::Vector{Float64}, H::Matrix{Float64}, R::Matrix{Float64})
     IM = H * x
@@ -161,7 +191,7 @@ function exkf_update(x::Vector{Float64}, P::Matrix{Float64}, y::Vector{Float64},
     Pp = P - K * IS * K'
     return (xp, Pp, K, IM, IS)
 end
-
+##
 #=
 This filter is less stanky than others. Because it is unscented. Am I humourous Father?!
 
@@ -253,7 +283,7 @@ end
 Input
 X - Nx1 state mean of previous step
 P - NxN state covariance estimate of pervious step
-A - Transition matrix of discrete model
+psi - Transition function of discrete model
 Q - Process noise of discrete model
 B - Input effect matrix
 U - Constant input
@@ -276,7 +306,7 @@ Input:
 x - Nx1 state mean of previous step
 P - NxN state covariance estimate of pervious step
 y - Dx1 Measurement vector
-H - Observation Matrix
+H - Observation function
 R - Measurement noise covariance
 
 Output (go by order not name screw you logic):
@@ -297,3 +327,4 @@ function ukf_update(x::Vector{Float64}, P::Matrix{Float64}, y::Vector{Float64}, 
     Pk = P - Kk * Sk * Kk'
     return (mk, Pk, Kk, muk, Sk)
 end
+##
