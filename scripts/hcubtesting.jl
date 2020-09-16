@@ -42,4 +42,5 @@ idint
 #=
 conclusion:
 use specifically implemented quadratures (gauss hermite comes to mind)
+tbh assumed gaussian filters perform about as well as unscented. not going to bother implementing, going to instead focus on ensemble and particle methods from now on
 =#

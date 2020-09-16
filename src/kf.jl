@@ -1,4 +1,4 @@
-#file containg code analogous to kf_update and kf_predict
+#file containing code analogous to kf_update and kf_predict
 
 using LinearAlgebra
 using Distributions
@@ -155,7 +155,6 @@ function exkf_predict(x::Vector{Float64}, P::Matrix, psi = x -> x, Q = zeros(siz
     Pp = jac * P * jac' + Q
     return (xp, Pp)
 end
-
 #=
 Input:
 x - Nx1 state mean of previous step
