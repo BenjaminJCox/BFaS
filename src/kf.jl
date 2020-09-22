@@ -197,7 +197,12 @@ This filter is less stanky than others. Because it is unscented. Am I humourous 
 DON'T USE THE FUNCTIONS BELOW EXCEPT THE PREDICT AND UPDATE ONES, THEY ARE JUST FOR CONVIENIENCE
 =#
 
-function ukf_generate_sigma_points(x::Vector{Float64}, P::Matrix{Float64}; alpha::Float64 = 1.0, kappa::Float64 = 3.0 - size(x, 1))
+function ukf_generate_sigma_points(
+    x::Vector{Float64},
+    P::Matrix{Float64};
+    alpha::Float64 = 1.0,
+    kappa::Float64 = 3.0 - size(x, 1),
+)
     n = size(x, 1)
     sigma_point_matrix = zeros(size(x, 1), 2 * size(x, 1) + 1)
     sigma_point_matrix[:, 1] = x
@@ -216,20 +221,20 @@ function ukf_propagate_sigma_points(sigma_point_matrix::Matrix{Float64}, f::Func
     return mapped_sigma_points
 end
 
-function ukf_weights(n::Int64; alpha::Float64 = 1.0, kappa::Float64 = 3.0 - size(x, 1), beta::Float64 = 0.)
-    weight_m_vector = ones(2n+1)
-    weight_c_vector = ones(2n+1)
+function ukf_weights(n::Int64; alpha::Float64 = 1.0, kappa::Float64 = 3.0 - size(x, 1), beta::Float64 = 0.0)
+    weight_m_vector = ones(2n + 1)
+    weight_c_vector = ones(2n + 1)
 
     lambda = alpha^2 * (n + kappa) - n
 
-    wv = 1/(2*n + 2*lambda)
+    wv = 1 / (2 * n + 2 * lambda)
 
     weight_m_vector .*= wv
     weight_c_vector .*= wv
 
 
-    weight_m_vector[1] = lambda / (n+lambda)
-    weight_c_vector[1] = lambda / (n+lambda) + (1 - alpha^2 + beta)
+    weight_m_vector[1] = lambda / (n + lambda)
+    weight_c_vector[1] = lambda / (n + lambda) + (1 - alpha^2 + beta)
 
     return @dict weight_m_vector weight_c_vector
 end
@@ -254,7 +259,13 @@ function ukf_pred_mean_cv(sigma_points::Matrix{Float64}, weight_dict, Q::Matrix{
     return (mkd, Pkd)
 end
 
-function ukf_upda_mean_cvneas_ccv_statemeas(mkd::Vector{Float64}, sigma_points::Matrix{Float64}, measuremodel_sigma_points::Matrix{Float64}, weight_dict, R::Matrix{Float64})
+function ukf_upda_mean_cvneas_ccv_statemeas(
+    mkd::Vector{Float64},
+    sigma_points::Matrix{Float64},
+    measuremodel_sigma_points::Matrix{Float64},
+    weight_dict,
+    R::Matrix{Float64},
+)
     n = size(sigma_points, 1)
     muk = zeros(size(measuremodel_sigma_points, 1))
 
@@ -292,10 +303,18 @@ X - Predicted state mean
 P - Predicted state covariance
 =#
 
-function ukf_predict(x::Vector{Float64}, P::Matrix, psi = x -> x, Q = zeros(size(x, 1), size(x, 1)); alpha::Float64 = 1.0, kappa::Float64 = 3.0 - size(x, 1), beta::Float64 = 0.)
+function ukf_predict(
+    x::Vector{Float64},
+    P::Matrix,
+    psi = x -> x,
+    Q = zeros(size(x, 1), size(x, 1));
+    alpha::Float64 = 1.0,
+    kappa::Float64 = 3.0 - size(x, 1),
+    beta::Float64 = 0.0,
+)
     sigma_points = ukf_generate_sigma_points(x, P; alpha = alpha, kappa = kappa)
     mapped_sigma_points = ukf_propagate_sigma_points(sigma_points, psi)
-    weights = ukf_weights(size(x,1); alpha = alpha, kappa = kappa, beta = beta)
+    weights = ukf_weights(size(x, 1); alpha = alpha, kappa = kappa, beta = beta)
     (mp, Pp) = ukf_pred_mean_cv(mapped_sigma_points, weights, Q)
     return (mp, Pp)
 end
@@ -316,10 +335,19 @@ IM - Predictive mean of y
 IS - Covariance of predictive mean of y
 =#
 
-function ukf_update(x::Vector{Float64}, P::Matrix{Float64}, y::Vector{Float64}, H, R::Matrix{Float64}; alpha::Float64 = 1.0, kappa::Float64 = 3.0 - size(x, 1), beta::Float64 = 0.)
+function ukf_update(
+    x::Vector{Float64},
+    P::Matrix{Float64},
+    y::Vector{Float64},
+    H,
+    R::Matrix{Float64};
+    alpha::Float64 = 1.0,
+    kappa::Float64 = 3.0 - size(x, 1),
+    beta::Float64 = 0.0,
+)
     sigma_points = ukf_generate_sigma_points(x, P; alpha = alpha, kappa = kappa)
     mapped_sigma_points = ukf_propagate_sigma_points(sigma_points, H)
-    weights = ukf_weights(size(x,1); alpha = alpha, kappa = kappa, beta = beta)
+    weights = ukf_weights(size(x, 1); alpha = alpha, kappa = kappa, beta = beta)
     (muk, Sk, Ck) = ukf_upda_mean_cvneas_ccv_statemeas(x, sigma_points, mapped_sigma_points, weights, R)
     Kk = Ck / Sk
     mk = x + Kk * (y - muk)

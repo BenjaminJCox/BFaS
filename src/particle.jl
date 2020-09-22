@@ -16,7 +16,7 @@ using StatsBase
 # end
 
 function bsf_draw_init(x::Vector{Float64}, P::Matrix{Float64}, n::Int64 = 5000)
-    xk = zeros(n, size(x,1))
+    xk = zeros(n, size(x, 1))
     prior = MvNormal(x, P)
     for i = 1:n
         xk[i, :] = rand(prior)
@@ -91,7 +91,15 @@ end
 #     return (xp, Pp)
 # end
 
-function bsf_step(x::Matrix{Float64}, P::Matrix{Float64}, Q::Matrix{Float64}, y::Vector{Float64}, R::Matrix{Float64}, psi::Function, H::Function)
+function bsf_step(
+    x::Matrix{Float64},
+    P::Matrix{Float64},
+    Q::Matrix{Float64},
+    y::Vector{Float64},
+    R::Matrix{Float64},
+    psi::Function,
+    H::Function,
+)
     n = size(x, 1)
     xpf = bsf_redraw(x, Q, psi)
     xob = mapslices(H, xpf, dims = 2)

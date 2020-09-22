@@ -23,8 +23,15 @@ psi(x) = 1.01 * x .^ 0.99
 #     end
 #     sps = Array(sample(dyn_mod(x, P, psi), NUTS(1000, 0.65), n + 1000))
 # end
-function bsf_draw(x::Vector{Float64}, Q::Matrix{Float64}, psi::Function, n::Int64 = 5000; adapt::Int64 = 1_000, accept::Float64 = 0.65)
-    xk = zeros(n, size(x,1))
+function bsf_draw(
+    x::Vector{Float64},
+    Q::Matrix{Float64},
+    psi::Function,
+    n::Int64 = 5000;
+    adapt::Int64 = 1_000,
+    accept::Float64 = 0.65,
+)
+    xk = zeros(n, size(x, 1))
     prior = MvNormal(psi(x), Q)
     for i = 1:n
         xk[i, :] = rand(prior)
@@ -98,4 +105,4 @@ end
 ind = stratified_resample(bsf, wts)
 ind = resample(bsf, wts)
 
-xk = zeros(n, size(x,1))
+xk = zeros(n, size(x, 1))

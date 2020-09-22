@@ -12,7 +12,7 @@ global const seqlen = 500
 
 function ex5_1()
     function linearised_pendulum(x)
-        xp = [x[1]+x[2]*dt, x[2]-g*sin(x[1])*dt]
+        xp = [x[1] + x[2] * dt, x[2] - g * sin(x[1]) * dt]
         return xp
     end
 
@@ -31,7 +31,7 @@ function ex5_1()
     x = zeros(2, seqlen)
     y = zeros(seqlen)
 
-    m0 = Vector{Float64}([0.5, 0.])
+    m0 = Vector{Float64}([0.5, 0.0])
 
     process_rand = MvNormal(Q)
     obs_rand = Normal(0.0, R)

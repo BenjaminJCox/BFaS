@@ -2,9 +2,12 @@ using DrWatson
 using Distributions
 using Plots
 
+
+
 include(srcdir("kf.jl"))
 include(srcdir("particle.jl"))
 
+plotlyjs()
 function ex3_1()
 
 
@@ -38,16 +41,16 @@ function ex3_1()
 
     psi(x) = A * x
     Hf(x) = H * x
-    dr = 1000
-    nxs = bsf_draw_init(m, P, dr)
+    # dr = 1000
+    # nxs = bsf_draw_init(m, P, dr)
     for k = 1:100
         # m, P = kf_predict(m, P, A, Q)
         # m, P = kf_update(m, P, [y[k]], H, hcat(R))
         # m, P = exkf_predict(m, P, psi, Q)
         # m, P = exkf_update(m, P, [y[k]], H, hcat(R))
-        # m, P = ukf_predict(m, P, psi, Q)
-        # m, P = ukf_update(m, P, [y[k]], Hf, hcat(R))
-        m, P, nxs = bsf_step(nxs, P, Q, [y[k]], hcat(R), psi, Hf)
+        m, P = ukf_predict(m, P, psi, Q)
+        m, P = ukf_update(m, P, [y[k]], Hf, hcat(R))
+        #m, P, nxs = bsf_step(nxs, P, Q, [y[k]], hcat(R), psi, Hf)
         # println(m)
         # println(P)
         kl_m[:, k] = m

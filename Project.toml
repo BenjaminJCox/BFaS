@@ -4,9 +4,12 @@ authors = ["Benjamin Cox"]
 [deps]
 BSON = "fbb218c0-5317-5bc6-957e-2ee96dd4b1f0"
 Bootstrap = "e28b5b4c-05e8-5b66-bc03-6f0c0a0a06e0"
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 Cuba = "8a292aeb-7a57-582c-b821-06e4c11590b1"
 Cubature = "667455a9-e2ce-5579-9412-b964f529a492"
 DataAssim = "cf87cc76-4620-5dad-9f0a-7411b2d39d18"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 DrWatson = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
