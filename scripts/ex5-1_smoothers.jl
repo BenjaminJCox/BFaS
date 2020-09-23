@@ -49,9 +49,13 @@ function ex5_1()
     P = Matrix{Float64}(I(2))
 
     kl_m = zeros(2, seqlen)
+    kl_P = zeros(2, 2, seqlen)
 
     dr = 1000
-    nxs = bsf_draw_init(m, P, dr)
+    nxs = bsf_draw_init(m0, P, dr)
+    wts = zeros(dr, seqlen)
+    sds = zeros(dr, 2, seqlen)
+
     for k = 1:seqlen
         # m, P = kf_predict(m, P, A, Q)
         # m, P = kf_update(m, P, [y[k]], H, hcat(R))
@@ -59,20 +63,31 @@ function ex5_1()
         # m, P = exkf_update(m, P, [y[k]], obs_func, hcat(R))
         # m, P = ukf_predict(m, P, linearised_pendulum, Q)
         # m, P = ukf_update(m, P, [y[k]], obs_func, hcat(R))
-        m, P, nxs = bsf_step(nxs, P, Q, [y[k]], hcat(R), linearised_pendulum, obs_func)
+        m, P, nxs, wv, xpf = bsf_step(nxs, P, Q, [y[k]], hcat(R), linearised_pendulum, obs_func)
         kl_m[:, k] = m
+        kl_P[:, :, k] = P
+        wts[:,k] = wv
+        sds[:,:,k] = xpf
     end
-    println(size(nxs))
-    return @dict x y kl_m
 
+    sm_m, sm_P = urts_smoother(kl_m, kl_P, linearised_pendulum, Q)
+    ps_m_alltraj = bsp_smoother(sds, wts, 100, linearised_pendulum, Q)
+
+    return @dict x y kl_m sm_m ps_m_alltraj
 end
 
 op = ex5_1()
 x = op[:x]
 y = op[:y]
 km = op[:kl_m]
+sm = op[:sm_m]
 ts = collect(dt .* (1:seqlen))
 
 plot(ts, x[1, :])
 plot!(ts, y, st = :scatter)
 plot!(ts, km[1, :])
+plot!(ts, sm[1, :])
+
+alltraj = op[:ps_m_alltraj]
+m_traj = mean(alltraj, dims = 3)
+plot!(ts, m_traj[1, :, :])

@@ -11,7 +11,7 @@ using ForwardDiff
 #=
 Input
 X - Nx1 state mean of previous step
-P - NxN state covariance estimate of pervious step
+P - NxN state covariance estimate of previous step
 A - Transition matrix of discrete model
 Q - Process noise of discrete model
 B - Input effect matrix

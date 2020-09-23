@@ -18,7 +18,7 @@ using StatsBase
 function bsf_draw_init(x::Vector{Float64}, P::Matrix{Float64}, n::Int64 = 5000)
     xk = zeros(n, size(x, 1))
     prior = MvNormal(x, P)
-    for i = 1:n
+    @simd for i = 1:n
         xk[i, :] = rand(prior)
     end
     return xk
@@ -26,19 +26,19 @@ end
 
 function bsf_redraw(x::Matrix{Float64}, Q::Matrix{Float64}, psi::Function)
     n = size(x, 1)
-    xp = x
+    xp = mapslices(psi, x, dims = 2)
     prior = MvNormal(Q)
-    for i = 1:n
-        xp[i, :] = psi(xp[i, :]) + rand(prior)
+    @simd for i = 1:n
+        xp[i, :] += rand(prior)
     end
-    return x
+    return xp
 end
 
 function bsf_weights(x::Matrix{Float64}, y::Vector{Float64}, H::Function, R::Matrix{Float64})
     x_obs_transform = mapslices(H, x, dims = 2)
     n = size(x_obs_transform, 1)
     weight_vector = zeros(size(x_obs_transform, 1))
-    for i = 1:n
+    @simd for i = 1:n
         xi = x_obs_transform[i, :]
         weight_vector[i] = pdf(MvNormal(xi, R), y)
     end
@@ -76,35 +76,12 @@ function resample(x::Matrix{Float64}, weights::Vector{Float64})
     return x[ns, :]
 end
 
-# function bsf_step(x::Vector{Float64}, P::Matrix{Float64}, Q::Matrix{Float64}, y::Vector{Float64}, R::Matrix{Float64}, psi::Function, H::Function; n::Int64 = 5000, adapt::Int64 = 1_000, accept::Float64 = 0.65)
-#     xps = bsf_draw(x, Q, n)
-#     wts = bsf_weights(xps, y, H, R)
-#     ep = eff_particles(wts)
-#     # if (ep < (n / 5.))
-#         # vtor = resample(xps, wts)
-#     # else
-#         # vtor = xps
-#     # end
-#     vtor = wts .* xps
-#     xp = Vector(mean(vtor, dims = 1)[:])
-#     Pp = cov(vtor, dims = 1)
-#     return (xp, Pp)
-# end
-
-function bsf_step(
-    x::Matrix{Float64},
-    P::Matrix{Float64},
-    Q::Matrix{Float64},
-    y::Vector{Float64},
-    R::Matrix{Float64},
-    psi::Function,
-    H::Function,
-)
+function bsf_step(x::Matrix{Float64}, P::Matrix{Float64}, Q::Matrix{Float64}, y::Vector{Float64}, R::Matrix{Float64}, psi::Function, H::Function)
     n = size(x, 1)
     xpf = bsf_redraw(x, Q, psi)
     xob = mapslices(H, xpf, dims = 2)
     weight_vector = zeros(size(xob, 1))
-    for i = 1:n
+    @simd for i = 1:n
         xi = xob[i, :]
         weight_vector[i] = pdf(MvNormal(xi, R), y)
     end
@@ -113,5 +90,5 @@ function bsf_step(
     P = cov(xpf, dims = 1)
     ninds = wsample(collect(1:n), weight_vector, n)
     nxs = xpf[ninds, :]
-    return (m, P, nxs)
+    return (m, P, nxs, weight_vector, xpf)
 end
