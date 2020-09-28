@@ -51,7 +51,7 @@ function ex5_1()
     kl_m = zeros(2, seqlen)
 
     dr = 1000
-    nxs = bsf_draw_init(m, P, dr)
+    nxs = bsf_draw_init(m0, P, dr)
     for k = 1:seqlen
         # m, P = kf_predict(m, P, A, Q)
         # m, P = kf_update(m, P, [y[k]], H, hcat(R))
@@ -62,7 +62,6 @@ function ex5_1()
         m, P, nxs = bsf_step(nxs, P, Q, [y[k]], hcat(R), linearised_pendulum, obs_func)
         kl_m[:, k] = m
     end
-    println(size(nxs))
     return @dict x y kl_m
 
 end

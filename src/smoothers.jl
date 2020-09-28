@@ -96,7 +96,7 @@ function urts_smoother(
     A::Function,
     Q::Array;
     alpha::Float64 = 1.0,
-    kappa::Float64 = 3.0 - size(x, 1),
+    kappa::Float64 = 3.0 - size(M, 1),
     beta::Float64 = 0.0,
 )
     Qq = Q
@@ -134,8 +134,7 @@ end
 #=
 Backward simulation particle smoother
 =#
-
-function bsp_smoother(X::Array{Float64, 3}, W::Array{Float64, 2}, s::Int64, psi::Function, Q::Array{Float64})
+function bsp_smoother(X::Array{Float64,3}, W::Array{Float64,2}, s::Int64, psi::Function, Q::Array{Float64})
     n = size(W, 1)
     T = size(W, 2)
     Qq = Q
@@ -144,18 +143,18 @@ function bsp_smoother(X::Array{Float64, 3}, W::Array{Float64, 2}, s::Int64, psi:
     end
     trajectories = zeros(size(X, 2), T, s)
     Threads.@threads for i = 1:s
-        xtbarind = wsample(1:n, W[:,T], 1)
+        xtbarind = wsample(1:n, W[:, T], 1)
         wvp = zeros(n)
         xtbar = zeros(size(X, 2), T)
         xtbar[:, T] = X[xtbarind, :, T]
         for t = (T-1):-1:1
             @simd for k = 1:n
-                wvp[k] = pdf(MvNormal(psi(X[k,:,t]), Qp[:,:,t]), xtbar[:, t+1])
+                wvp[k] = pdf(MvNormal(psi(X[k, :, t]), Qp[:, :, t]), xtbar[:, t+1])
             end
             wvp ./= sum(wvp)
             xtbar[:, t] = X[wsample(1:n, wvp, 1), :, t]
         end
-        trajectories[:,:,i] = xtbar
+        trajectories[:, :, i] = xtbar
     end
     return trajectories
 end

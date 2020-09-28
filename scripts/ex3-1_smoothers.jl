@@ -8,7 +8,8 @@ include(srcdir("kf.jl"))
 include(srcdir("particle.jl"))
 include(srcdir("smoothers.jl"))
 
-plotlyjs()
+# plotlyjs()
+gr()
 function ex3_1()
 
 
@@ -59,15 +60,15 @@ function ex3_1()
         # println(P)
         kl_m[:, k] = m
         kl_P[:, :, k] = P
-        wts[:,k] = wv
-        sds[:,:,k] = xpf
+        wts[:, k] = wv
+        sds[:, :, k] = xpf
     end
 
     sm_m, sm_P = urts_smoother(kl_m, kl_P, psi, Q)
 
-    ps_m_alltraj = bsp_smoother(sds, wts, 100, psi, Q)
+    # ps_m_alltraj = bsp_smoother(sds, wts, 100, psi, Q)
 
-    return @dict x y kl_m kl_P sm_m sm_P wts sds ps_m_alltraj
+    return @dict x y kl_m kl_P sm_m sm_P wts sds #ps_m_alltraj
 end
 
 op = ex3_1()
@@ -76,11 +77,11 @@ y = op[:y]
 km = op[:kl_m]
 sm = op[:sm_m]
 
-plot(1:100, x[1, :])
-plot!(1:100, y)
-plot!(1:100, km[1, :])
-plot!(1:100, sm[1, :])
+plot(1:100, x[1, :], size = (750, 500), label = "Truth")
+plot!(1:100, y, label = "Observations", st = :scatter)
+plot!(1:100, km[1, :], label = "Filter Mean")
+plot!(1:100, sm[1, :], label = "Smoother Mean")
 
-alltraj = op[:ps_m_alltraj]
-m_traj = mean(alltraj, dims = 3)
-plot!(1:100, m_traj[1, :, :])
+# alltraj = op[:ps_m_alltraj]
+# m_traj = mean(alltraj, dims = 3)
+# plot!(1:100, m_traj[1, :, :])

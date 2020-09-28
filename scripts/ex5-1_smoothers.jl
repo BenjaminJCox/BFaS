@@ -3,13 +3,14 @@ using LinearAlgebra
 using Distributions
 using Plots
 # plotlyjs()
+gr()
 
 include(srcdir("kf.jl"))
 include(srcdir("particle.jl"))
 
 global const dt = 0.01
 global const g = 9.81
-global const seqlen = 500
+global const seqlen = 50
 
 function ex5_1()
     function linearised_pendulum(x)
@@ -66,14 +67,14 @@ function ex5_1()
         m, P, nxs, wv, xpf = bsf_step(nxs, P, Q, [y[k]], hcat(R), linearised_pendulum, obs_func)
         kl_m[:, k] = m
         kl_P[:, :, k] = P
-        wts[:,k] = wv
-        sds[:,:,k] = xpf
+        wts[:, k] = wv
+        sds[:, :, k] = xpf
     end
 
     sm_m, sm_P = urts_smoother(kl_m, kl_P, linearised_pendulum, Q)
-    ps_m_alltraj = bsp_smoother(sds, wts, 100, linearised_pendulum, Q)
+    # ps_m_alltraj = bsp_smoother(sds, wts, 100, linearised_pendulum, Q)
 
-    return @dict x y kl_m sm_m ps_m_alltraj
+    return @dict x y kl_m sm_m #ps_m_alltraj
 end
 
 op = ex5_1()
@@ -83,11 +84,11 @@ km = op[:kl_m]
 sm = op[:sm_m]
 ts = collect(dt .* (1:seqlen))
 
-plot(ts, x[1, :])
-plot!(ts, y, st = :scatter)
-plot!(ts, km[1, :])
-plot!(ts, sm[1, :])
+plot(ts, x[1, :], size = (750, 500), label = "Truth")
+plot!(ts, y, st = :scatter, label = "Observations")
+plot!(ts, km[1, :], label = "Filter Mean")
+plot!(ts, sm[1, :], label = "Smoother Mean")
 
-alltraj = op[:ps_m_alltraj]
-m_traj = mean(alltraj, dims = 3)
-plot!(ts, m_traj[1, :, :])
+# alltraj = op[:ps_m_alltraj]
+# m_traj = mean(alltraj, dims = 3)
+# plot!(ts, m_traj[1, :, :])

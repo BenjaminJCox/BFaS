@@ -6,6 +6,7 @@ using Plots
 
 include(srcdir("kf.jl"))
 include(srcdir("particle.jl"))
+include(srcdir("param_est.jl"))
 
 plotlyjs()
 function ex3_1()
@@ -43,6 +44,45 @@ function ex3_1()
     Hf(x) = (H * x)
     dr = 1000
     nxs = bsf_draw_init(m, P, dr)
+
+    function At(theta)
+        A = theta[:A]
+        function rv(x)
+            return A * x
+        end
+        return rv
+    end
+
+    function Ht(theta)
+        H = theta[:H]
+        function rv(x)
+            return H * x
+        end
+        return rv
+    end
+
+    function Qt(theta)
+        Q = theta[:Q]
+        return Q
+    end
+
+    function Rt(theta)
+        R = theta[:R]
+        return R
+    end
+
+    function Pt(theta)
+        P = theta[:P]
+        return P
+    end
+
+    function mt(theta)
+        mt = theta[:m]
+        return mt
+    end
+    R = hcat(R)
+    theta = @dict A H Q R m P
+
     for k = 1:100
         # m, P = kf_predict(m, P, A, Q)
         # m, P = kf_update(m, P, [y[k]], H, hcat(R))
@@ -55,7 +95,8 @@ function ex3_1()
         # println(P)
         kl_m[:, k] = m
     end
-    return @dict x y kl_m
+    sep = sir_energy_approx(theta, At, Ht, Qt, Rt, mt, Pt, hcat(y), 100)
+    return @dict x y kl_m sep
 end
 
 op = ex3_1()
