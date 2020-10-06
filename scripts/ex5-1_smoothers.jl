@@ -7,10 +7,11 @@ gr()
 
 include(srcdir("kf.jl"))
 include(srcdir("particle.jl"))
+include(srcdir("smoothers.jl"))
 
 global const dt = 0.01
 global const g = 9.81
-global const seqlen = 50
+global const seqlen = 500
 
 function ex5_1()
     function linearised_pendulum(x)

@@ -80,7 +80,9 @@ function ex3_1()
         mt = theta[:m]
         return mt
     end
+
     R = hcat(R)
+
     theta = @dict A H Q R m P
 
     for k = 1:100
@@ -95,7 +97,7 @@ function ex3_1()
         # println(P)
         kl_m[:, k] = m
     end
-    sep = sir_energy_approx(theta, At, Ht, Qt, Rt, mt, Pt, hcat(y), 100)
+    sep = sir_energy_approx(theta, At, Ht, Qt, Rt, mt, Pt, hcat(y), 1000)
     return @dict x y kl_m sep
 end
 

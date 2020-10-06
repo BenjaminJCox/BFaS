@@ -34,7 +34,7 @@ function d_energy_lGm(
 
     Δe::Float64 = 0.5 * (log(2π * det(Sk)) + vk' / Sk * vk)
 
-    return (mk, pk, Δe)
+    return (mk, Pk, Δe)
 end
 
 function sir_energy_approx(
@@ -68,6 +68,8 @@ function sir_energy_approx(
     slog = 0.
     l_est = zeros(T)
 
+    yk = zeros(size(y, 2))
+
     for t = 1:T
         yk = y[t,:]
         importance_samples = bsf_redraw(xs[:,:,t], Qt, At)
@@ -82,7 +84,7 @@ function sir_energy_approx(
         wts[:, t+1] ./= sum(wts[:, t+1])
 
         ninds = wsample(collect(1:N), wts[:, t+1], N)
-        wts[:, t+1] .= wts[ninds, t+1]
+        wts[:, t+1] = wts[ninds, t+1]
         rd_x = xs[ninds, :, t+1]
         xs[:, :, t+1] = rd_x
     end

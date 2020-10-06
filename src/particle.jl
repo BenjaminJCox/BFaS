@@ -100,3 +100,145 @@ function bsf_step(
     nxs = xpf[ninds, :]
     return (m, P, nxs, weight_vector, xpf)
 end
+
+function apf_init(x::Vector{Float64}, P::Matrix{Float64}, n::Int64 = 5000)
+    xk = zeros(n, size(x, 1))
+    prior = MvNormal(x, P)
+    for i = 1:n
+        xk[i, :] = rand(prior)
+    end
+    wts = repeat([1 / n], n)
+    return (xk, wts)
+end
+
+function apf_redraw(x::Matrix{Float64}, Q::Matrix{Float64}, psi::Function)
+    n = size(x, 1)
+    xp = mapslices(psi, x, dims = 2)
+    prior = MvNormal(Q)
+    @simd for i = 1:n
+        xp[i, :] += rand(prior)
+    end
+    return xp
+end
+
+function apf_step(
+    x::Matrix{Float64},
+    Q::Matrix{Float64},
+    y::Vector{Float64},
+    R::Matrix{Float64},
+    psi::Function,
+    H::Function,
+    prev_weights::Vector{Float64},
+)
+    n = size(x, 1)
+
+    x_pred = mapslices(psi, x, dims = 2)
+    x_obs = mapslices(H, x_pred, dims = 2)
+    weight_vector = zeros(n)
+
+    @simd for i = 1:n
+        xi = x_obs[i, :]
+        weight_vector[i] = pdf(MvNormal(xi, R), y) * prev_weights[i]
+    end
+
+    weight_vector ./= sum(weight_vector)
+    index_sample = wsample(1:n, weight_vector, n)
+    selected_x = x[index_sample, :]
+    selected_x_sim = apf_redraw(selected_x, Q, psi)
+
+    @simd for i = 1:n
+        x_num = H(selected_x_sim[i, :])
+        x_den = H(selected_x[i, :])
+        weight_vector[i] = pdf(MvNormal(x_num, R), y) / pdf(MvNormal(x_den, R), y)
+    end
+
+    weight_vector ./= sum(weight_vector)
+
+    m = sum(weight_vector .* selected_x_sim, dims = 1)
+    P = cov(weight_vector .* selected_x_sim, dims = 1)
+
+    return (m, P, selected_x_sim, weight_vector)
+end
+
+function rapid_mvn(x::Vector{Float64}, mu::Vector{Float64}, sigma::Matrix{Float64})
+    @assert size(x) == size(mu)
+    @assert size(mu, 1) == size(sigma, 1)
+    @assert size(sigma, 1) == size(sigma, 2)
+
+    k = size(mu, 1)
+
+    t1 = (2π)^(-k/2)
+    t2 = 1. / sqrt(det(sigma))
+    lt3 = transpose(x - mu) * inv(sigma) * (x - mu)
+    t3 = exp(-0.5 * lt3)
+    return (t1 * t2 * t3)
+end
+
+function rapid_mvn_prec(x::Vector{Float64}, mu::Vector{Float64}, i_sigma::Matrix{Float64}, isq_d_sigma::Float64)
+    k = size(mu, 1)
+
+    t1 = (2π)^(-k/2)
+    t2 = isq_d_sigma
+    lt3 = transpose(x - mu) * i_sigma * (x - mu)
+    t3 = exp(-0.5 * lt3)
+    return (t1 * t2 * t3)
+end
+
+function iapf_step(
+    x::Matrix{Float64},
+    Q::Matrix{Float64},
+    y::Vector{Float64},
+    R::Matrix{Float64},
+    psi::Function,
+    H::Function,
+    prev_weights::Vector{Float64},
+)
+    n = size(x, 1)
+
+    x_pred = mapslices(psi, x, dims = 2)
+    x_obs = mapslices(H, x_pred, dims = 2)
+
+    weight_vector = zeros(n)
+    l_weight_vector = zeros(n)
+    i_sigma = inv(Q)
+    isq_d_sigma = 1. / sqrt(det(Q))
+    for i = 1:n
+        xi = x_obs[i, :]
+        xp = x_pred[i, :]
+        l_weight_vector[i] = pdf(MvNormal(xi, R), y)
+        # helper(x) = pdf(MvNormal(x, Q), xp)
+        pixty = zeros(n)
+        # pixty = mapslices(helper, x_pred, dims = 2)
+        @simd for j = 1:n
+            # pixty[j] = pdf(MvNormal(x_pred[j, :], Q), xp)
+            pixty[j] = rapid_mvn_prec(xp, x_pred[j, :], i_sigma, isq_d_sigma)
+        end
+        l_weight_vector[i] *= sum(pixty .* prev_weights) / sum(pixty)
+    end
+
+    l_weight_vector ./= sum(l_weight_vector)
+    index_sample = wsample(1:n, l_weight_vector, n)
+    selected_x = x[index_sample, :]
+    selected_x_sim = apf_redraw(selected_x, Q, psi)
+
+    for i = 1:n
+        x_num = H(selected_x_sim[i, :])
+        weight_vector[i] = pdf(MvNormal(x_num, R), y)
+        # helper(x) = pdf(MvNormal(x, Q), selected_x_sim[i, :])
+        # pixty = mapslices(helper, x_pred, dims = 2)
+        pixty = zeros(n)
+        @simd for j = 1:n
+            # pixty[j] = pdf(MvNormal(x_pred[j, :], Q), selected_x_sim[i, :])
+            pixty[j] = rapid_mvn_prec(selected_x_sim[i, :], x_pred[j, :], i_sigma, isq_d_sigma)
+        end
+        weight_vector[i] *= sum(pixty)
+        weight_vector[i] /= sum(l_weight_vector .* pixty)
+    end
+
+    weight_vector ./= sum(weight_vector)
+
+    m = sum(weight_vector .* selected_x_sim, dims = 1)
+    P = cov(weight_vector .* selected_x_sim, dims = 1)
+
+    return (m, P, selected_x_sim, weight_vector)
+end

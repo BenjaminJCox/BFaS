@@ -50,8 +50,9 @@ function ex5_1()
 
     kl_m = zeros(2, seqlen)
 
-    dr = 1000
-    nxs = bsf_draw_init(m0, P, dr)
+    dr = 100
+    # nxs = bsf_draw_init(m0, P, dr)
+    nxs, olw = apf_init(m0, P, dr)
     for k = 1:seqlen
         # m, P = kf_predict(m, P, A, Q)
         # m, P = kf_update(m, P, [y[k]], H, hcat(R))
@@ -59,7 +60,8 @@ function ex5_1()
         # m, P = exkf_update(m, P, [y[k]], obs_func, hcat(R))
         # m, P = ukf_predict(m, P, linearised_pendulum, Q)
         # m, P = ukf_update(m, P, [y[k]], obs_func, hcat(R))
-        m, P, nxs = bsf_step(nxs, P, Q, [y[k]], hcat(R), linearised_pendulum, obs_func)
+        # m, P, nxs = bsf_step(nxs, P, Q, [y[k]], hcat(R), linearised_pendulum, obs_func)
+        m, P, nxs, olw = apf_step(nxs, Q, [y[k]], hcat(R), linearised_pendulum, obs_func, olw)
         kl_m[:, k] = m
     end
     return @dict x y kl_m
