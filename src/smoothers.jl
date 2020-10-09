@@ -141,7 +141,7 @@ function bsp_smoother(X::Array{Float64,3}, W::Array{Float64,2}, s::Int64, psi::F
     if size(Q, 3) == 1
         Qp = repeat(Q, 1, 1, T)
     end
-    trajectories = zeros(size(X, 2), T, s)
+    trajectories = zeros(size(X, 2), s, T)
     Threads.@threads for i = 1:s
         xtbarind = wsample(1:n, W[:, T], 1)
         wvp = zeros(n)
@@ -149,12 +149,73 @@ function bsp_smoother(X::Array{Float64,3}, W::Array{Float64,2}, s::Int64, psi::F
         xtbar[:, T] = X[xtbarind, :, T]
         for t = (T-1):-1:1
             @simd for k = 1:n
-                wvp[k] = pdf(MvNormal(psi(X[k, :, t]), Qp[:, :, t]), xtbar[:, t+1])
+                wvp[k] = pdf(MvNormal(psi(X[k, :, t]), Qp[:, :, t]), xtbar[:, t+1]) * W[k, t]
             end
             wvp ./= sum(wvp)
             xtbar[:, t] = X[wsample(1:n, wvp, 1), :, t]
         end
-        trajectories[:, :, i] = xtbar
+        trajectories[:, i, :] = xtbar
+    end
+    return trajectories
+end
+
+function rs_bsp_smoother(X::Array{Float64,3}, W::Array{Float64,2}, s::Int64, psi::Function, Q::Array{Float64}, max_iter = 10)
+    n = size(W, 1)
+    T = size(W, 2)
+
+    Qq = Q
+    if size(Q, 3) == 1
+        Qp = repeat(Q, 1, 1, T)
+    end
+
+    rho = zeros(T)
+    for i = 1:T
+        rho[i] = pdf(MvNormal(X[1, :, 1], Qp[:, :, i]), X[1, :, 1])
+    end
+
+    trajectories = zeros(size(X, 2), s, T)
+    endp = wsample(1:n, W[:, T], s)
+    for i = 1:s
+        trajectories[:,i,T] = X[endp[i], :, T]
+    end
+
+    trajectory_indices = zeros(Int64, s, T-1)
+    for t = (T-1):-1:1
+        L = collect(1:s)
+        delta = [0]
+        c_iter = 0
+        while (length(L) > 0) && (c_iter < max_iter)
+            card_l = length(L)
+            delta = [0]
+            index_samples = wsample(1:n, W[:, t], card_l)
+            uniform_samples = (rand(card_l) .* rho[t])
+            @simd for k = 1:card_l
+                test_distn = MvNormal(psi(X[index_samples[k], :, t]), Qp[:, :, t+1])
+                if (uniform_samples[k] <= pdf(test_distn, trajectories[:, L[k], t+1]))
+                    trajectory_indices[L[k], t] = index_samples[k]
+                    delta = vcat(delta, L[k])
+                end
+            end
+            filter!(x -> !in(x, delta), L)
+            c_iter += 1
+        end
+
+        if (length(L) > 0)
+            for j in L
+                reweight = zeros(n)
+                @simd for i = 1:n
+                    distn = MvNormal(psi(X[i, :, t]), Qp[:, :, t+1])
+                    reweight[i] = W[i, t] * pdf(distn, trajectories[:, j, t+1])
+                end
+                reweight ./= sum(reweight)
+                btj = wsample(1:n, reweight, 1)[1]
+                trajectory_indices[j, t] = btj
+            end
+        end
+        @simd for i = 1:s
+            index = trajectory_indices[i, t]
+            trajectories[:, i, t] = X[index, :, t]
+        end
     end
     return trajectories
 end
