@@ -46,6 +46,7 @@ function ex3_1()
     Hf(x) = H * x
     dr = 1000
     nxs = bsf_draw_init(m, P, dr)
+    inits = nxs
     wts = zeros(dr, seqlen)
     sds = zeros(dr, 2, seqlen)
     for k = 1:100
@@ -66,11 +67,15 @@ function ex3_1()
 
     sm_m, sm_P = urts_smoother(kl_m, kl_P, psi, Q)
 
-    # ps_m_alltraj = bsp_smoother(sds, wts, 30, psi, Q)
+    ps_m_alltraj = bsp_smoother(sds, wts, 30, psi, Q)
 
     ntj = rs_bsp_smoother(sds, wts, 30, psi, Q)
 
-    return @dict x y kl_m kl_P sm_m sm_P wts sds ntj
+    sirp = sirp_smoother(Matrix(transpose(hcat(y))), psi, Hf, Q, hcat(R), Matrix(transpose(inits[1:30, :])))
+
+    # gibbs = pgas_smooth(kl_m, Matrix(hcat(y)'), 1000, psi, Hf, Q, hcat(R), Matrix(inits[1:999, :]'))
+
+    return @dict x y kl_m kl_P sm_m sm_P wts sds sirp ntj ps_m_alltraj
 end
 
 op = ex3_1()
@@ -84,11 +89,22 @@ plot!(1:100, y, label = "Observations", st = :scatter)
 plot!(1:100, km[1, :], label = "Filter Mean")
 plot!(1:100, sm[1, :], label = "Smoother Mean")
 
-# alltraj = op[:ps_m_alltraj]
-# m_traj = mean(alltraj, dims = 2)
-# plot!(1:100, m_traj[1, 1, :], label = "BSS Mean")
+sirp = op[:sirp]
+m_sirp = mean(sirp, dims = 2)[:, 1, :]
+plot!(1:100, m_sirp[1, :], label = "SIR Smoother Mean")
+
+alltraj = op[:ps_m_alltraj]
+m_traj = mean(alltraj, dims = 2)
+plot!(1:100, m_traj[1, 1, :], label = "BSS Mean")
 
 
 ntj = op[:ntj]
 ntg_traj = mean(ntj, dims = 2)
 plot!(1:100, ntg_traj[1, 1, :], label = "RS BSS Mean")
+#
+# gibbs = op[:gibbs]
+# g_part = size(gibbs[2], 1)
+# gind = wsample(1:g_part, gibbs[2], 1)
+# g_path = gibbs[1][:, gind, :][:, 1, :]
+# g_mean = sum(gibbs[2]' .* gibbs[1][:, :, :], dims = 2)[:, 1, :]
+# plot!(1:100, g_path[1, :], label = "PGAS")

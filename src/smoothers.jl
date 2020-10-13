@@ -175,11 +175,11 @@ function rs_bsp_smoother(X::Array{Float64,3}, W::Array{Float64,2}, s::Int64, psi
 
     trajectories = zeros(size(X, 2), s, T)
     endp = wsample(1:n, W[:, T], s)
-    for i = 1:s
-        trajectories[:,i,T] = X[endp[i], :, T]
+    @simd for i = 1:s
+        trajectories[:, i, T] = X[endp[i], :, T]
     end
 
-    trajectory_indices = zeros(Int64, s, T-1)
+    trajectory_indices = zeros(Int64, s, T - 1)
     for t = (T-1):-1:1
         L = collect(1:s)
         delta = [0]
@@ -218,4 +218,46 @@ function rs_bsp_smoother(X::Array{Float64,3}, W::Array{Float64,2}, s::Int64, psi
         end
     end
     return trajectories
+end
+
+function sirp_smoother(
+    y::Matrix{Float64},
+    psi::Function,
+    H::Function,
+    Q::Array{Float64},
+    R::Array{Float64},
+    prior_samples::Matrix{Float64},
+)
+    n = size(prior_samples, 1)
+    T = size(y, 2)
+
+    s = size(prior_samples, 2)
+
+    Qq = Q
+    if size(Q, 3) == 1
+        Qq = repeat(Q, 1, 1, T)
+    end
+    Rr = R
+    if size(R, 3) == 1
+        Rr = repeat(R, 1, 1, T)
+    end
+
+    weights = zeros(s)
+    weights .+= 1 / s
+
+    state_histories = zeros(n, s, T)
+    state_histories[:, :, 1] = prior_samples
+    for t = 2:T
+        @simd for i = 1:s
+            state_histories[:, i, t] = rand(MvNormal(psi(state_histories[:, i, t-1]), Qq[:, :, t]))
+            weights[i] = weights[i] * pdf(MvNormal(H(state_histories[:, i, t]), Rr[:, :, t]), y[:, t])
+        end
+        weights ./= sum(weights)
+
+        rs_inds = wsample(1:s, weights, s, replace = true, ordered = true)
+        state_histories = state_histories[:, rs_inds, :]
+        weights .= 1/s
+    end
+
+    return state_histories
 end

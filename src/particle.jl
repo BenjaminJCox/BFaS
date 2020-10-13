@@ -167,8 +167,8 @@ function rapid_mvn(x::Vector{Float64}, mu::Vector{Float64}, sigma::Matrix{Float6
 
     k = size(mu, 1)
 
-    t1 = (2π)^(-k/2)
-    t2 = 1. / sqrt(det(sigma))
+    t1 = (2π)^(-k / 2)
+    t2 = 1.0 / sqrt(det(sigma))
     lt3 = transpose(x - mu) * inv(sigma) * (x - mu)
     t3 = exp(-0.5 * lt3)
     return (t1 * t2 * t3)
@@ -177,7 +177,7 @@ end
 function rapid_mvn_prec(x::Vector{Float64}, mu::Vector{Float64}, i_sigma::Matrix{Float64}, isq_d_sigma::Float64)
     k = size(mu, 1)
 
-    t1 = (2π)^(-k/2)
+    t1 = (2π)^(-k / 2)
     t2 = isq_d_sigma
     lt3 = transpose(x - mu) * i_sigma * (x - mu)
     t3 = exp(-0.5 * lt3)
@@ -201,7 +201,7 @@ function iapf_step(
     weight_vector = zeros(n)
     l_weight_vector = zeros(n)
     i_sigma = inv(Q)
-    isq_d_sigma = 1. / sqrt(det(Q))
+    isq_d_sigma = 1.0 / sqrt(det(Q))
     for i = 1:n
         xi = x_obs[i, :]
         xp = x_pred[i, :]
