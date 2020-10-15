@@ -43,27 +43,40 @@ function ex3_1()
     kl_m = zeros(2, seqlen)
     kl_P = zeros(2, 2, seqlen)
 
+    kl_em = zeros(2, seqlen)
+    kl_eP = zeros(2, 2, seqlen)
+
+    em = m
+    eP = P
+
     psi(x) = A * x
     Hf(x) = H * x
     dr = 1000
     nxs = bsf_draw_init(m, P, dr)
     inits = nxs
     wts = zeros(dr, seqlen)
+    wv = zeros(dr)
+    wv .+= 1.
     sds = zeros(dr, 2, seqlen)
     for k = 1:100
         # m, P = kf_predict(m, P, A, Q)
         # m, P = kf_update(m, P, [y[k]], H, hcat(R))
         # m, P = exkf_predict(m, P, psi, Q)
         # m, P = exkf_update(m, P, [y[k]], H, hcat(R))
-        # m, P = ukf_predict(m, P, psi, Q)
-        # m, P = ukf_update(m, P, [y[k]], Hf, hcat(R))
-        m, P, nxs, wv, xpf = bsf_step(nxs, P, Q, [y[k]], hcat(R), psi, Hf)
+        em, eP = ukf_predict(em, eP, psi, Q)
+        em, eP = ukf_update(em, eP, [y[k]], Hf, hcat(R))
+        # m, P, nxs, wv, xpf = bsf_step(nxs, P, Q, [y[k]], hcat(R), psi, Hf)
+        # m, P, nxs, wv, xpf = apf_step(nxs, Q, [y[k]], hcat(R), psi, Hf, wv)
+        m, P, nxs, wv, xpf = sir_filter_ukfprop(nxs, P, Q, [y[k]], hcat(R), psi, Hf)
         # println(m)
         # println(P)
+        kl_em[:, k] = em
+        kl_eP[:, :, k] = eP
         kl_m[:, k] = m
         kl_P[:, :, k] = P
         wts[:, k] = wv
         sds[:, :, k] = xpf
+        # sds[:, :, k] = nxs
     end
 
     println("Bootstrap Filter Complete")
@@ -85,19 +98,21 @@ function ex3_1()
     pmmh = naive_pmmh_run(m0 .+ 5., P ./ 3, Q .* 2, hcat(R) .* 2, Matrix(transpose(hcat(y))), psi, Hf, 100, 50)
     println("Particle Marginal Metropolis Hastings Complete")
 
-    return @dict x y kl_m kl_P sm_m sm_P wts sds sirp ntj ps_m_alltraj pmmh
+    return @dict x y kl_m kl_P kl_em kl_eP sm_m sm_P wts sds sirp ntj ps_m_alltraj pmmh
 end
 
 op = ex3_1()
 x = op[:x]
 y = op[:y]
 km = op[:kl_m]
+ekm = op[:kl_em]
 sm = op[:sm_m]
 wts = op[:wts]
 
 plot(1:100, x[1, :], size = (750, 500), label = "Truth")
 plot!(1:100, y, label = "Observations", st = :scatter)
-plot!(1:100, km[1, :], label = "Filter Mean")
+plot!(1:100, km[1, :], label = "UP Filter Mean")
+plot!(1:100, ekm[1, :], label = "UKF Mean")
 plot!(1:100, sm[1, :], label = "Smoother Mean")
 
 sirp = op[:sirp]

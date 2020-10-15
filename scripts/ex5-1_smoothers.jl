@@ -28,7 +28,7 @@ function ex5_1()
 
     Q = [qc * dt^3 / 3 qc * dt^2 / 2; qc * dt^2 / 2 qc * dt]
 
-    R = 0.3
+    R = 0.1
 
 
     x = zeros(2, seqlen)
@@ -66,10 +66,11 @@ function ex5_1()
         # m, P = ukf_predict(m, P, linearised_pendulum, Q)
         # m, P = ukf_update(m, P, [y[k]], obs_func, hcat(R))
         m, P, nxs, wv, xpf = bsf_step(nxs, P, Q, [y[k]], hcat(R), linearised_pendulum, obs_func)
+        # m, P, nxs, wv = sir_filter_ukfprop(nxs, P, Q, [y[k]], hcat(R), linearised_pendulum, obs_func)
         kl_m[:, k] = m
         kl_P[:, :, k] = P
         wts[:, k] = wv
-        sds[:, :, k] = xpf
+        # sds[:, :, k] = xpf
     end
 
     sm_m, sm_P = urts_smoother(kl_m, kl_P, linearised_pendulum, Q)
