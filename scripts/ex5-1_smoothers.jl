@@ -2,8 +2,8 @@ using DrWatson
 using LinearAlgebra
 using Distributions
 using Plots
-# plotlyjs()
-gr()
+plotlyjs()
+# gr()
 
 include(srcdir("kf.jl"))
 include(srcdir("particle.jl"))

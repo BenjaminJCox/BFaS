@@ -49,7 +49,7 @@ function sir_energy_approx(
     N::Int64,
 )
     T = size(y, 1)
-    wts = zeros(N, T+1)
+    wts = zeros(N, T + 1)
 
     At = A(theta)
     Ht = H(theta)
@@ -59,23 +59,23 @@ function sir_energy_approx(
     mt = m(theta)
 
     prior_samples = bsf_draw_init(mt, Pt, N)
-    xs = zeros(size(prior_samples, 1), size(prior_samples, 2), T+1)
+    xs = zeros(size(prior_samples, 1), size(prior_samples, 2), T + 1)
 
     xs[:, :, 1] = prior_samples
-    wts[:, 1] .= 1. / N
+    wts[:, 1] .= 1.0 / N
     v = zeros(N)
 
-    slog = 0.
+    slog = 0.0
     l_est = zeros(T)
 
     yk = zeros(size(y, 2))
 
     for t = 1:T
-        yk = y[t,:]
-        importance_samples = bsf_redraw(xs[:,:,t], Qt, At)
+        yk = y[t, :]
+        importance_samples = bsf_redraw(xs[:, :, t], Qt, At)
         xs[:, :, t+1] = importance_samples
         for i = 1:N
-            y_distn = MvNormal(Ht(importance_samples[i,:]), Rt)
+            y_distn = MvNormal(Ht(importance_samples[i, :]), Rt)
             v[i] = pdf(y_distn, yk)
         end
         l_est[t] = sum(wts[:, t] .* v[:])
@@ -222,4 +222,120 @@ function pgas_smooth(
     end
 
     return (trajectories, weights, prior_draws, mean_gibbs)
+end
+
+function log_lh_weights(weights::Vector{Float64})
+    N = length(weights)
+    log_LH = log(sum(weights)) - log(N)
+    return log_LH
+end
+
+function log_lh_weights(weights::Matrix{Float64})
+    N = size(weights, 1)
+    T = size(weights, 2)
+    log_LH = 0.0
+    for t = 1:T
+        log_LH += log(sum(weights[:, t])) - log(N)
+    end
+    return log_LH
+end
+
+function rand_symmat(n::Int64)
+    rv = randn(n, n)
+    rv = Symmetric(rv)
+    rv = Matrix(rv)
+    return rv
+end
+
+
+function naive_pmmh_run(m0, P0, Q0, R0, y, psi, H, dr, iterations)
+    T = size(y, 2)
+
+    nxs = bsf_draw_init(m0, P0, dr)
+
+    n = size(m0, 1)
+    o_s = size(y, 1)
+
+    kl_m = zeros(n, T)
+    wts = zeros(dr, T)
+    sds = zeros(dr, n, T)
+
+    all_paths = zeros(n, dr, T)
+    selected_paths = zeros(n, T, iterations)
+
+    ll_list = zeros(iterations)
+    # all_paths[:, :, 1] = nxs
+
+    wv = zeros(dr)
+    for k = 1:T
+        m, P, nxs, wv, xpf = bsf_step(nxs, P0, Q0, y[:, k], R0, psi, H)
+        kl_m[:, k] = m
+        wts[:, k] = wv
+        sds[:, :, k] = xpf
+        all_paths[:, :, k] = nxs'
+    end
+
+    path_ind = wsample(1:dr, wv, 1)
+    path = all_paths[:, path_ind, :][:, 1, :]
+
+    m_list = zeros(n, iterations)
+    P_list = zeros(n, n, iterations)
+    Q_list = zeros(n, n, iterations)
+    R_list = zeros(o_s, o_s, iterations)
+
+    m_list[:, 1] = m0
+    P_list[:, :, 1] = sqrt(P0)
+    Q_list[:, :, 1] = sqrt(Q0)
+    R_list[:, :, 1] = sqrt(R0)
+    ll_list[1] = log_lh_weights(wts)
+    selected_paths[:, :, 1] = path
+
+    for i = 2:iterations
+        # m_list[:, i] = m_list[:, i-1] + randn(n)
+        # P_list[:, :, i] = P_list[:, :, i-1] + rand_symmat(n)
+        # Q_list[:, :, i] = Q_list[:, :, i-1] + rand_symmat(n)
+        # R_list[:, :, i] = R_list[:, :, i-1] + rand_symmat(o_s)
+        ms = m_list[:, i-1] + randn(n)
+        sPs = P_list[:, :, i-1] + rand_symmat(n)
+        sQs = Q_list[:, :, i-1] + rand_symmat(n)
+        sRs = R_list[:, :, i-1] + rand_symmat(o_s)
+
+        Ps = sPs^2
+        Qs = sQs^2
+        Rs = sRs^2
+
+        nxs = bsf_draw_init(ms, Ps, dr)
+
+        for k = 1:T
+            m, P, nxs, wv, xpf = bsf_step(nxs, Ps, Qs, y[:, k], Rs, psi, H)
+            kl_m[:, k] = m
+            wts[:, k] = wv
+            sds[:, :, k] = xpf
+            all_paths[:, :, k] = nxs'
+        end
+
+        path_ind = wsample(1:dr, wv, 1)
+        path = all_paths[:, path_ind, :][:, 1, :]
+
+        l_lh = log_lh_weights(wts)
+
+        accept_prob = min(1.0, l_lh / ll_list[i-1])
+        accept = (rand() <= accept_prob)
+
+        if accept
+            m_list[:, i] = ms
+            P_list[:, :, i] = sPs
+            Q_list[:, :, i] = sQs
+            R_list[:, :, i] = sRs
+            selected_paths[:, :, i] = path
+        else
+            m_list[:, i] = m_list[:, i-1]
+            P_list[:, :, i] = P_list[:, :, i-1]
+            Q_list[:, :, i] = Q_list[:, :, i-1]
+            R_list[:, :, i] = R_list[:, :, i-1]
+            selected_paths[:, :, i] = selected_paths[:, :, i-1]
+        end
+    end
+
+    return @dict m_list P_list Q_list R_list selected_paths
 end

@@ -7,6 +7,7 @@ using Plots
 include(srcdir("kf.jl"))
 include(srcdir("particle.jl"))
 include(srcdir("smoothers.jl"))
+include(srcdir("param_est.jl"))
 
 # gr()
 plotlyjs()
@@ -65,17 +66,26 @@ function ex3_1()
         sds[:, :, k] = xpf
     end
 
+    println("Bootstrap Filter Complete")
+
     sm_m, sm_P = urts_smoother(kl_m, kl_P, psi, Q)
+    println("URTS Smoother Complete")
 
     ps_m_alltraj = bsp_smoother(sds, wts, 30, psi, Q)
+    println("Backward Simulation Particle Smoother Complete")
 
     ntj = rs_bsp_smoother(sds, wts, 30, psi, Q)
+    println("Rejection Sampling Backward Simulation Particle Smoother Complete")
 
     sirp = sirp_smoother(Matrix(transpose(hcat(y))), psi, Hf, Q, hcat(R), Matrix(transpose(inits[1:30, :])))
+    println("SIR Particle Smoother Complete")
 
     # gibbs = pgas_smooth(kl_m, Matrix(hcat(y)'), 1000, psi, Hf, Q, hcat(R), Matrix(inits[1:999, :]'))
 
-    return @dict x y kl_m kl_P sm_m sm_P wts sds sirp ntj ps_m_alltraj
+    pmmh = naive_pmmh_run(m0 .+ 5., P ./ 3, Q .* 2, hcat(R) .* 2, Matrix(transpose(hcat(y))), psi, Hf, 100, 50)
+    println("Particle Marginal Metropolis Hastings Complete")
+
+    return @dict x y kl_m kl_P sm_m sm_P wts sds sirp ntj ps_m_alltraj pmmh
 end
 
 op = ex3_1()
@@ -83,6 +93,7 @@ x = op[:x]
 y = op[:y]
 km = op[:kl_m]
 sm = op[:sm_m]
+wts = op[:wts]
 
 plot(1:100, x[1, :], size = (750, 500), label = "Truth")
 plot!(1:100, y, label = "Observations", st = :scatter)
@@ -98,9 +109,15 @@ m_traj = mean(alltraj, dims = 2)
 plot!(1:100, m_traj[1, 1, :], label = "BSS Mean")
 
 
+
 ntj = op[:ntj]
 ntg_traj = mean(ntj, dims = 2)
 plot!(1:100, ntg_traj[1, 1, :], label = "RS BSS Mean")
+
+pmmh_path = op[:pmmh][:selected_paths][:, :, 50]
+plot!(1:100, pmmh_path[1, :], label = "PMMH Path <br> (For θ inference)")
+
+
 #
 # gibbs = op[:gibbs]
 # g_part = size(gibbs[2], 1)

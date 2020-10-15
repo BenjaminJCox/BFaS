@@ -93,10 +93,11 @@ function bsf_step(
         xi = xob[i, :]
         weight_vector[i] = pdf(MvNormal(xi, R), y)
     end
+    weight_vector .+= eps(Float64) #for starbility reasons
     weight_vector ./= sum(weight_vector)
     m = sum(weight_vector .* xpf, dims = 1)
     P = cov(xpf, dims = 1)
-    ninds = wsample(collect(1:n), weight_vector, n)
+    ninds = wsample(collect(1:n), weight_vector, n, replace = true)
     nxs = xpf[ninds, :]
     return (m, P, nxs, weight_vector, xpf)
 end
