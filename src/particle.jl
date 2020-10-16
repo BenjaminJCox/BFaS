@@ -101,7 +101,7 @@ function bsf_step(
     P = cov(xpf, dims = 1)
     ninds = wsample(collect(1:n), weight_vector, n, replace = true)
     nxs = xpf[ninds, :]
-    return (m, P, nxs, weight_vector, xpf)
+    return (m, P, nxs, weight_vector, xpf, ninds)
 end
 
 function apf_init(x::Vector{Float64}, P::Matrix{Float64}, n::Int64 = 5000)
@@ -160,7 +160,7 @@ function apf_step(
     m = sum(weight_vector .* selected_x_sim, dims = 1)
     P = cov(weight_vector .* selected_x_sim, dims = 1)
 
-    return (m, P, selected_x_sim, weight_vector, selected_x_sim)
+    return (m, P, selected_x_sim, weight_vector, selected_x_sim, sample_inds)
 end
 
 function rapid_mvn(x::Vector{Float64}, mu::Vector{Float64}, sigma::Matrix{Float64})
@@ -271,63 +271,12 @@ function resample_move_MH_pf_step(
     mh_steps::Int64,
 )
 
-    Pp = P
-    m = mean(x, dims = 2)
-    mp = m[:, 1]
+    sirres = sir_filter_ukfprop(x, P, Q, y, R, psi, H)
+    p_mean = sirres[1]
+    p_cov = sirres[2]
+    samples = sirres[3]
+    select_indices = sirres[6]
 
-    _xdim = size(x, 1)
-
-    mp, Pp = ukf_predict(mp, Pp, psi, Q)
-    mp, Pp = ukf_update(mp, Pp, y, H, R)
-
-    num_particles = size(x, 2)
-    Pp = Matrix(Hermitian(Pp))
-    sampling_mvn = MvNormal(m, Pp)
-
-    unjittered_samples = rand(sampling_mvn, num_particles)
-
-    weights = zeros(num_particles)
-
-    _Q1 = inv(Q)
-    _Q2 = 1.0 / sqrt(det(Q))
-    _R1 = inv(R)
-    _R2 = 1.0 / sqrt(det(R))
-
-    for i = 1:num_particles
-        weights[i] = rapid_mvn_prec(unjittered_samples[:, i], psi(x[:, i]), _Q1, _Q2)
-        weights[i] *= rapid_mvn_prec(y, H(unjittered_samples[:, i]), _R1, _R2)
-        weights[i] /= pdf(sampling_mvn, unjittered_samples[:, i])
-    end
-
-    normed_weights = weights .+ eps(Float64)
-    normed_weights ./= sum(normed_weights)
-
-    sampling_indices = wsample(1:num_particles, normed_weights, num_particles, replace = true)
-
-    resampled_unjittered = unjittered_samples[:, sampling_indices]
-    resampled_all = all_particles[:, sampling_indices, :]
-    pt_mh = cat(resampled_all, resampled_unjittered; dims = 3)
-
-    current_time = size(all_particles, 3)
-    # if (current_time <= lag)
-    #     mh_samples = pt_mh
-    #     for i = 1:num_particles
-    #         part_mhs = mh_samples[:, i, 1:current_time]
-    #         for m = 1:mh_steps
-    #             mh_m = zeros(_xdim)
-    #             mh_c = Matrix{Float64}(I(_xdim))
-    #             mh_prop = MvNormal(mh_m, mh_c)
-    #             H = rand(mh_prop, current_time)
-    #             Z = part_mhs .+ H
-    #             acc_num = 1.
-    #             acc_den = 1.
-    #             for t = 1:current_time
-    #                 acc_num *=
-    m = mean(resampled_unjittered, dims = 2)
-    P = cov(resampled_unjittered, dims = 2)
-    nxs = resampled_unjittered
-
-    return (m, P, nxs)
 end
 
 function sir_filter_ukfprop(
@@ -397,5 +346,5 @@ function sir_filter_ukfprop(
     # mn = mean(proposal_samples, dims = 1)
     # Pn = cov(selected_samples, dims = 1)
 
-    return (mn, Pn, selected_samples, weights, selected_samples)
+    return (mn, Pn, selected_samples, weights, selected_samples, sample_inds)
 end

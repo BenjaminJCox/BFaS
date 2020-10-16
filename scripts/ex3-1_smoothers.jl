@@ -79,7 +79,7 @@ function ex3_1()
         # sds[:, :, k] = nxs
     end
 
-    println("Bootstrap Filter Complete")
+    println("SIR UKF Filter Complete")
 
     sm_m, sm_P = urts_smoother(kl_m, kl_P, psi, Q)
     println("URTS Smoother Complete")
