@@ -79,9 +79,9 @@ function ex3_1()
         # sds[:, :, k] = nxs
     end
 
-    println("SIR UKF Filter Complete")
+    println("Filter Complete")
 
-    sm_m, sm_P = urts_smoother(kl_m, kl_P, psi, Q)
+    sm_m, sm_P = urts_smoother(kl_em, kl_eP, psi, Q)
     println("URTS Smoother Complete")
 
     ps_m_alltraj = bsp_smoother(sds, wts, 30, psi, Q)
@@ -111,9 +111,9 @@ wts = op[:wts]
 
 plot(1:100, x[1, :], size = (750, 500), label = "Truth")
 plot!(1:100, y, label = "Observations", st = :scatter)
-plot!(1:100, km[1, :], label = "UP Filter Mean")
+plot!(1:100, km[1, :], label = "Filter Mean")
 plot!(1:100, ekm[1, :], label = "UKF Mean")
-plot!(1:100, sm[1, :], label = "Smoother Mean")
+plot!(1:100, sm[1, :], label = "URTS Smoother Mean")
 
 sirp = op[:sirp]
 m_sirp = mean(sirp, dims = 2)[:, 1, :]

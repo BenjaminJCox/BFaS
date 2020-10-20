@@ -355,3 +355,17 @@ function ukf_update(
     return (mk, Pk, Kk, muk, Sk)
 end
 ##
+
+function rmse(truth::Matrix{Float64}, estimate::Matrix{Float64})
+    T = size(truth, 2)
+    @assert size(truth) == size(estimate)
+
+    mse = 0.
+    for i = 1:T
+        sre = truth[:, i] - estimate[:, i]
+        mse += sre' * sre
+    end
+    mse /= T
+    rmse = sqrt(mse)
+    return rmse
+end
