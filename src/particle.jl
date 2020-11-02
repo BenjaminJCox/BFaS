@@ -36,12 +36,17 @@ function bsf_redraw(x::Matrix{Float64}, Q::Matrix{Float64}, psi::Function)
     return xp
 end
 
-function bsf_weights(x::Matrix{Float64}, y::Vector{Float64}, H::Function, R::Matrix{Float64})
+function bsf_weights(
+    x::Matrix{Float64},
+    y::Vector{Float64},
+    H::Function,
+    R::Matrix{Float64},
+)
     x_obs_transform = mapslices(H, x, dims = 2)
     n = size(x_obs_transform, 1)
     weight_vector = zeros(size(x_obs_transform, 1))
     @simd for i = 1:n
-        xi = x_obs_transform[i, :]
+        xi = @views x_obs_transform[i, :]
         weight_vector[i] = pdf(MvNormal(xi, R), y)
     end
     weight_vector ./= sum(weight_vector)
@@ -92,7 +97,7 @@ function bsf_step(
     xob = mapslices(H, xpf, dims = 2)
     weight_vector = zeros(size(xob, 1))
     @simd for i = 1:n
-        xi = xob[i, :]
+        xi = @views xob[i, :]
         weight_vector[i] = pdf(MvNormal(xi, R), y)
     end
     weight_vector .+= eps(Float64) #for starbility reasons
@@ -177,7 +182,12 @@ function rapid_mvn(x::Vector{Float64}, mu::Vector{Float64}, sigma::Matrix{Float6
     return (t1 * t2 * t3)
 end
 
-function rapid_mvn_prec(x::Vector{Float64}, mu::Vector{Float64}, i_sigma::Matrix{Float64}, isq_d_sigma::Float64)
+function rapid_mvn_prec(
+    x::Vector{Float64},
+    mu::Vector{Float64},
+    i_sigma::Matrix{Float64},
+    isq_d_sigma::Float64,
+)
     k = size(mu, 1)
 
     t1 = (2π)^(-k / 2)
@@ -232,7 +242,8 @@ function iapf_step(
         pixty = zeros(n)
         @simd for j = 1:n
             # pixty[j] = pdf(MvNormal(x_pred[j, :], Q), selected_x_sim[i, :])
-            pixty[j] = rapid_mvn_prec(selected_x_sim[i, :], x_pred[j, :], i_sigma, isq_d_sigma)
+            pixty[j] =
+                rapid_mvn_prec(selected_x_sim[i, :], x_pred[j, :], i_sigma, isq_d_sigma)
         end
         weight_vector[i] *= sum(pixty)
         weight_vector[i] /= sum(l_weight_vector .* pixty)
@@ -246,16 +257,50 @@ function iapf_step(
     return (m, P, selected_x_sim, weight_vector)
 end
 
+#mh kernal for use on a per path basis
 function mh_kernel(
-    resampled_all::Array{Float64,3},
+    resampled_path::Array{Float64,2},
+    obs_hist::Array{Float64,2},
     psi::Function,
-    H::Function,
+    H_func::Function,
     Q::Matrix{Float64},
     R::Matrix{Float64},
     lag::Int64,
     mh_steps::Int64,
 )
+    _xdim = size(resampled_path, 1)
+    _T = size(resampled_path, 2)
 
+    jittered_path = resampled_path
+
+    for m = 1:mh_steps
+        H = randn(_xdim, lag)
+        mh_proposal = jittered_path
+        mh_proposal[:, (_T-lag+1):_T] .+= H
+        println(mh_proposal[:, 3])
+        println(H_func(mh_proposal[:, 3]))
+        acc_num = 1.0
+        acc_den = 1.0
+
+        for k = (_T-lag+1):_T
+            f_num = MvNormal(psi(mh_proposal[:, k-1]), Q)
+            f_den = MvNormal(psi(jittered_path[:, k-1]), Q)
+
+            g_num = MvNormal(H_func(mh_proposal[:, k]), R)
+            g_den = MvNormal(H_func(jittered_path[:, k]), R)
+
+            acc_num *= pdf(f_num, mh_proposal[:, k]) * pdf(g_num, obs_hist[:, k])
+            acc_den *= pdf(f_den, jittered_path[:, k]) * pdf(g_den, obs_hist[:, k])
+        end
+
+        acc_rat = acc_num / acc_den
+        _a = rand()
+        if _a <= acc_rat
+            jittered_path = mh_proposal
+        end
+    end
+
+    return jittered_path
 end
 
 function resample_move_MH_pf_step(
@@ -267,6 +312,7 @@ function resample_move_MH_pf_step(
     psi::Function,
     H::Function,
     all_particles::Array{Float64,3},
+    all_obs::Array{Float64,2},
     lag::Int64,
     mh_steps::Int64,
 )
@@ -311,25 +357,26 @@ function sir_filter_ukfprop(
     # proposal_samples = rand(proposal_dist, num_particles)
     # proposal_samples = Matrix(transpose(proposal_samples))
     proposal_samples = zeros(num_particles, _xdim)
-    for i = 1:num_particles
+    @simd for i = 1:num_particles
         proposal_dist = MvNormal(f_means[i, :], f_covs[i, :, :])
         proposal_samples[i, :] = rand(proposal_dist)
     end
 
     implied_obs = zeros(num_particles, _ydim)
 
-    for i = 1:num_particles
+    @simd for i = 1:num_particles
         implied_obs[i, :] = H(proposal_samples[i, :])
     end
 
     log_weights = zeros(num_particles)
-    for i in 1:num_particles
-        _x = proposal_samples[i, :]
-        _impY = implied_obs[i, :]
+    @simd for i = 1:num_particles
+        @views _x = proposal_samples[i, :]
+        @views _impY = implied_obs[i, :]
         model_dist = MvNormal(psi(x[i, :]), Q)
         obs_dist = MvNormal(_impY, R)
         proposal_dist = MvNormal(f_means[i, :], f_covs[i, :, :])
-        log_weights[i] = logpdf(model_dist, _x) + logpdf(obs_dist, y) - logpdf(proposal_dist, _x)
+        log_weights[i] =
+            logpdf(model_dist, _x) + logpdf(obs_dist, y) - logpdf(proposal_dist, _x)
     end
     cst = maximum(log_weights)
     weights = exp.(log_weights .- cst)

@@ -16,7 +16,7 @@ function ex3_1()
 
     A = [1.0 1.0; 0.0 1.0]
     H = [1.0 0.0]
-    Q = [1.0 / 10^2 0.0; 0.0 1.0^2]
+    Q = [1.0/10^2 0.0; 0.0 1.0^2]
     R = [10.0^2]
 
     m0 = rand(MvNormal([0.0, 0.0], [1.0 0.0; 0.0 1.0]))
@@ -56,7 +56,7 @@ function ex3_1()
     inits = nxs
     wts = zeros(dr, seqlen)
     wv = zeros(dr)
-    wv .+= 1.
+    wv .+= 1.0
     sds = zeros(dr, 2, seqlen)
     for k = 1:100
         # m, P = kf_predict(m, P, A, Q)
@@ -78,9 +78,9 @@ function ex3_1()
         sds[:, :, k] = xpf
         # sds[:, :, k] = nxs
     end
-
+    y_long = Matrix(transpose(hcat(y)))
     println("Filter Complete")
-
+    # mhrso = mh_kernel(sds[1,:,:], y_long, psi, Hf, Q, hcat(R), 3, 50)
     sm_m, sm_P = urts_smoother(kl_em, kl_eP, psi, Q)
     println("URTS Smoother Complete")
 
@@ -90,15 +90,32 @@ function ex3_1()
     ntj = rs_bsp_smoother(sds, wts, 30, psi, Q)
     println("Rejection Sampling Backward Simulation Particle Smoother Complete")
 
-    sirp = sirp_smoother(Matrix(transpose(hcat(y))), psi, Hf, Q, hcat(R), Matrix(transpose(inits[1:30, :])))
+    sirp = sirp_smoother(
+        Matrix(transpose(hcat(y))),
+        psi,
+        Hf,
+        Q,
+        hcat(R),
+        Matrix(transpose(inits[1:30, :])),
+    )
     println("SIR Particle Smoother Complete")
 
     # gibbs = pgas_smooth(kl_m, Matrix(hcat(y)'), 1000, psi, Hf, Q, hcat(R), Matrix(inits[1:999, :]'))
 
-    pmmh = naive_pmmh_run(m0 .+ 5., P ./ 3, Q .* 2, hcat(R) .* 2, Matrix(transpose(hcat(y))), psi, Hf, 100, 50)
+    pmmh = naive_pmmh_run(
+        m0 .+ 5.0,
+        P ./ 3,
+        Q .* 2,
+        hcat(R) .* 2,
+        Matrix(transpose(hcat(y))),
+        psi,
+        Hf,
+        100,
+        50,
+    )
     println("Particle Marginal Metropolis Hastings Complete")
 
-    return @dict x y kl_m kl_P kl_em kl_eP sm_m sm_P wts sds sirp ntj ps_m_alltraj pmmh
+    return @dict x y kl_m kl_P kl_em kl_eP sm_m sm_P wts sds sirp ntj ps_m_alltraj pmmh mhrso
 end
 
 op = ex3_1()
