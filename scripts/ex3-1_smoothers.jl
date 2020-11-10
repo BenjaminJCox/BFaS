@@ -2,26 +2,26 @@ using DrWatson
 using Distributions
 using Plots
 
-
-
 include(srcdir("kf.jl"))
 include(srcdir("particle.jl"))
 include(srcdir("smoothers.jl"))
 include(srcdir("param_est.jl"))
 
+
+Random.seed!(3)
 # gr()
 plotlyjs()
 function ex3_1()
 
 
-    A = [1.0 1.0; 0.0 1.0]
+    A = [1.0 1.0; -0.1 0.2]
     H = [1.0 0.0]
     Q = [1.0/10^2 0.0; 0.0 1.0^2]
-    R = [10.0^2]
+    R = [3.0^2]
 
     m0 = rand(MvNormal([0.0, 0.0], [1.0 0.0; 0.0 1.0]))
 
-    seqlen = 100
+    seqlen = 150
 
     x = zeros(2, seqlen)
     y = zeros(seqlen)
@@ -58,11 +58,19 @@ function ex3_1()
     wv = zeros(dr)
     wv .+= 1.0
     sds = zeros(dr, 2, seqlen)
-    for k = 1:100
+    lh_arr = zeros(seqlen)
+    ef_arr = zeros(seqlen+1)
+    ef_arr[1] = 0.0
+    large_num = 5.
+    Q .*= 1.0
+    R .*= 1.0
+    for k = 1:150
         # m, P = kf_predict(m, P, A, Q)
         # m, P = kf_update(m, P, [y[k]], H, hcat(R))
         # m, P = exkf_predict(m, P, psi, Q)
         # m, P = exkf_update(m, P, [y[k]], H, hcat(R))
+        lh_arr[k] = -log(marginal_lh(em, [y[k]], psi, Hf, Q, hcat(R), em.+[-large_num, -large_num], em.+[large_num, large_num]))
+        ef_arr[k+1] = ef_arr[k] + lh_arr[k]
         em, eP = ukf_predict(em, eP, psi, Q)
         em, eP = ukf_update(em, eP, [y[k]], Hf, hcat(R))
         # m, P, nxs, wv, xpf = bsf_step(nxs, P, Q, [y[k]], hcat(R), psi, Hf)
@@ -70,6 +78,7 @@ function ex3_1()
         m, P, nxs, wv, xpf = sir_filter_ukfprop(nxs, P, Q, [y[k]], hcat(R), psi, Hf)
         # println(m)
         # println(P)
+
         kl_em[:, k] = em
         kl_eP[:, :, k] = eP
         kl_m[:, k] = m
@@ -79,16 +88,16 @@ function ex3_1()
         # sds[:, :, k] = nxs
     end
     y_long = Matrix(transpose(hcat(y)))
-    println("Filter Complete")
+    @info("Filter Complete")
     # mhrso = mh_kernel(sds[1,:,:], y_long, psi, Hf, Q, hcat(R), 3, 50)
     sm_m, sm_P = urts_smoother(kl_em, kl_eP, psi, Q)
-    println("URTS Smoother Complete")
+    @info("URTS Smoother Complete")
 
     ps_m_alltraj = bsp_smoother(sds, wts, 30, psi, Q)
-    println("Backward Simulation Particle Smoother Complete")
+    @info("Backward Simulation Particle Smoother Complete")
 
     ntj = rs_bsp_smoother(sds, wts, 30, psi, Q)
-    println("Rejection Sampling Backward Simulation Particle Smoother Complete")
+    @info("Rejection Sampling Backward Simulation Particle Smoother Complete")
 
     sirp = sirp_smoother(
         Matrix(transpose(hcat(y))),
@@ -98,24 +107,25 @@ function ex3_1()
         hcat(R),
         Matrix(transpose(inits[1:30, :])),
     )
-    println("SIR Particle Smoother Complete")
+    @info("SIR Particle Smoother Complete")
 
     # gibbs = pgas_smooth(kl_m, Matrix(hcat(y)'), 1000, psi, Hf, Q, hcat(R), Matrix(inits[1:999, :]'))
 
-    pmmh = naive_pmmh_run(
-        m0 .+ 5.0,
-        P ./ 3,
-        Q .* 2,
-        hcat(R) .* 2,
-        Matrix(transpose(hcat(y))),
-        psi,
-        Hf,
-        100,
-        50,
-    )
-    println("Particle Marginal Metropolis Hastings Complete")
+    # pmmh = naive_pmmh_run(
+    #     m0 .+ 5.0,
+    #     P ./ 3,
+    #     Q .* 2,
+    #     hcat(R) .* 2,
+    #     Matrix(transpose(hcat(y))),
+    #     psi,
+    #     Hf,
+    #     100,
+    #     50,
+    # )
+    # println("Particle Marginal Metropolis Hastings Complete")
+    rv_ef = ef_arr[2:end]
 
-    return @dict x y kl_m kl_P kl_em kl_eP sm_m sm_P wts sds sirp ntj ps_m_alltraj pmmh mhrso
+    return @dict x y kl_m kl_P kl_em kl_eP sm_m sm_P wts sds sirp ntj ps_m_alltraj lh_arr rv_ef
 end
 
 op = ex3_1()
@@ -126,28 +136,41 @@ ekm = op[:kl_em]
 sm = op[:sm_m]
 wts = op[:wts]
 
-plot(1:100, x[1, :], size = (750, 500), label = "Truth")
-plot!(1:100, y, label = "Observations", st = :scatter)
-plot!(1:100, km[1, :], label = "Filter Mean")
-plot!(1:100, ekm[1, :], label = "UKF Mean")
-plot!(1:100, sm[1, :], label = "URTS Smoother Mean")
+
+umf = rmse(x, km)
+emf = rmse(x, ekm)
+println("UKF RMSE:", emf)
+println("SIRUKF RMSE:", umf)
+
+
+plot(1:150, x[1, :], size = (750, 500), label = "Truth", legend=:outertopright)
+plot!(1:150, y, label = "Observations", st = :scatter)
+plot!(1:150, km[1, :], label = "Filter Mean")
+plot!(1:150, ekm[1, :], label = "UKF Mean")
+plot!(1:150, sm[1, :], label = "URTS Smoother Mean")
 
 sirp = op[:sirp]
 m_sirp = mean(sirp, dims = 2)[:, 1, :]
-plot!(1:100, m_sirp[1, :], label = "SIR Smoother Mean")
+plot!(1:150, m_sirp[1, :], label = "SIR Smoother Mean")
 
 alltraj = op[:ps_m_alltraj]
 m_traj = mean(alltraj, dims = 2)
-plot!(1:100, m_traj[1, 1, :], label = "BSS Mean")
+plot!(1:150, m_traj[1, 1, :], label = "BSS Mean")
 
 
 
 ntj = op[:ntj]
 ntg_traj = mean(ntj, dims = 2)
-plot!(1:100, ntg_traj[1, 1, :], label = "RS BSS Mean")
+plot!(1:150, ntg_traj[1, 1, :], label = "RS BSS Mean")
 
-pmmh_path = op[:pmmh][:selected_paths][:, :, 50]
-plot!(1:100, pmmh_path[1, :], label = "PMMH Path <br> (For θ inference)")
+y_lh = op[:lh_arr]
+p1 = plot(1:150, y_lh, label = "Observation Likelihood")
+y_ef = op[:rv_ef]
+p2 = plot(1:150, y_ef, label = "Energy Function")
+plot(p1, p2, layout = (2,1), size = (750, 500))
+# pmmh_path = op[:pmmh][:selected_paths][:, :, 50]
+# plot!(1:100, pmmh_path[1, :], label = "PMMH Path <br> (For θ inference)")
+
 
 
 #

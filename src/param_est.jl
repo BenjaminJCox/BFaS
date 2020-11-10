@@ -4,6 +4,7 @@ using Distributions
 using ForwardDiff
 using Turing
 using Optim
+using HCubature
 
 include("particle.jl")
 include("kf.jl")
@@ -107,7 +108,12 @@ function rapid_mvn(x::Vector{Float64}, mu::Vector{Float64}, sigma::Matrix{Float6
     return (t1 * t2 * t3)
 end
 
-function rapid_mvn_prec(x::Vector{Float64}, mu::Vector{Float64}, i_sigma::Matrix{Float64}, isq_d_sigma::Float64)
+function rapid_mvn_prec(
+    x::Vector{Float64},
+    mu::Vector{Float64},
+    i_sigma::Matrix{Float64},
+    isq_d_sigma::Float64,
+)
     k = size(mu, 1)
 
     t1 = (2π)^(-k / 2)
@@ -184,7 +190,9 @@ function pgas_smooth(
         j_wts = zeros(s)
 
         @simd for i = 1:s
-            j_wts[i] = weights[i] * r_mvn_pdf(reference_x[:, t], psi(trajectories[:, i, t-1]), _Q1, _Q2)
+            j_wts[i] =
+                weights[i] *
+                r_mvn_pdf(reference_x[:, t], psi(trajectories[:, i, t-1]), _Q1, _Q2)
         end
 
         j_wts ./= sum(j_wts)
@@ -338,4 +346,49 @@ function naive_pmmh_run(m0, P0, Q0, R0, y, psi, H, dr, iterations)
     end
 
     return @dict m_list P_list Q_list R_list selected_paths
+end
+
+#calculates p(y_k, x_k|y_k-1, θ) = p(y_k|x_k, θ)*p(x_k|y_k-1, θ), must be integrated over x_k to obtain marginalised
+function state_llh(
+    previous_state::Vector{Float64},
+    current_state,
+    current_obs::Vector{Float64},
+    step_function::Function,
+    obs_function::Function,
+    process_cov::Matrix{Float64},
+    obs_cov::Matrix{Float64},
+)
+    predictive_state = step_function(previous_state)
+    predictive_obs = obs_function(predictive_state)
+
+    current_state_dist = MvNormal(predictive_state, process_cov)
+    obs_dist = MvNormal(predictive_obs, obs_cov)
+
+    lh = logpdf(obs_dist, current_obs) + logpdf(current_state_dist, current_state)
+    return lh
+end
+
+function marginal_lh(
+    previous_state::Vector{Float64},
+    current_obs::Vector{Float64},
+    step_function::Function,
+    obs_function::Function,
+    process_cov::Matrix{Float64},
+    obs_cov::Matrix{Float64},
+    state_lower::Vector{Float64},
+    state_upper::Vector{Float64},
+)
+    unmarg_lh(x) = exp(state_llh(
+        previous_state,
+        x,
+        current_obs,
+        step_function,
+        obs_function,
+        process_cov,
+        obs_cov,
+    ))
+
+    marg_lh = hcubature(unmarg_lh, state_lower, state_upper, initdiv = 5)
+    @info("Cubature Complete")
+    return marg_lh[1]
 end

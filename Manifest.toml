@@ -269,10 +269,10 @@ uuid = "366bfd00-2699-11ea-058f-f148b4cae6d8"
 version = "0.9.6"
 
 [[EarCut_jll]]
-deps = ["Libdl", "Pkg"]
-git-tree-sha1 = "eabac56550a7d7e0be499125673fbff560eb8b20"
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "92d8f9f208637e8d2d28c664051a00569c01493d"
 uuid = "5ae413db-bbd1-5e63-b57d-d24a61df00f5"
-version = "2.1.5+0"
+version = "2.1.5+1"
 
 [[EllipsisNotation]]
 git-tree-sha1 = "65dad386e877850e6fce4fc77f60fe75a468ce9d"
@@ -380,6 +380,12 @@ version = "0.8.3"
 git-tree-sha1 = "03d381f65183cb2d0af8b3425fde97263ce9a995"
 uuid = "42e2da0e-8278-4e71-bc24-59509adca0fe"
 version = "1.0.0"
+
+[[HCubature]]
+deps = ["Combinatorics", "DataStructures", "LinearAlgebra", "QuadGK", "StaticArrays"]
+git-tree-sha1 = "fc4adde0a029bf69c0da3f7c25ca24b5e0e389ed"
+uuid = "19dc6840-f33b-545b-b366-655c7e3ffd49"
+version = "1.4.0"
 
 [[HTTP]]
 deps = ["Base64", "Dates", "IniFile", "MbedTLS", "Sockets"]
@@ -556,10 +562,10 @@ uuid = "739be429-bea8-5141-9913-cc70e7f3736d"
 version = "1.0.2"
 
 [[MbedTLS_jll]]
-deps = ["Libdl", "Pkg"]
-git-tree-sha1 = "c0b1286883cac4e2b617539de41111e0776d02e8"
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "0eef589dd1c26a3ac9d753fe1a8bcad63f956fa6"
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
-version = "2.16.8+0"
+version = "2.16.8+1"
 
 [[Measures]]
 git-tree-sha1 = "e498ddeee6f9fdb4551ce855a46f54dbd900245f"
@@ -638,10 +644,10 @@ uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
 version = "1.1.1+6"
 
 [[OpenSpecFun_jll]]
-deps = ["CompilerSupportLibraries_jll", "Libdl", "Pkg"]
-git-tree-sha1 = "d51c416559217d974a1113522d5919235ae67a87"
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "9db77584158d0ab52307f8c04f8e7c08ca76b5b3"
 uuid = "efe28fd5-8261-553b-a9e1-b2916fc3738e"
-version = "0.5.3+3"
+version = "0.5.3+4"
 
 [[Optim]]
 deps = ["Compat", "FillArrays", "LineSearches", "LinearAlgebra", "NLSolversBase", "NaNMath", "Parameters", "PositiveFactorizations", "Printf", "SparseArrays", "StatsBase"]
@@ -979,9 +985,9 @@ version = "0.6.2"
 
 [[Zlib_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "ded43825988ace7a311ee7e1d0f09571822509c4"
+git-tree-sha1 = "320228915c8debb12cb434c59057290f0834dbf6"
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
-version = "1.2.11+17"
+version = "1.2.11+18"
 
 [[ZygoteRules]]
 deps = ["MacroTools"]

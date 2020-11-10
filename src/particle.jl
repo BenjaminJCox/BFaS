@@ -101,12 +101,14 @@ function bsf_step(
         weight_vector[i] = pdf(MvNormal(xi, R), y)
     end
     weight_vector .+= eps(Float64) #for starbility reasons
+    #calculates approximation of p(y_n|y_1:n-1) by summing weights as on pg196 Sarkaa BFaS (previous weights equal)
+    weight_sum = sum(weights) / num_particles
     weight_vector ./= sum(weight_vector)
     m = sum(weight_vector .* xpf, dims = 1)
     P = cov(xpf, dims = 1)
     ninds = wsample(collect(1:n), weight_vector, n, replace = true)
     nxs = xpf[ninds, :]
-    return (m, P, nxs, weight_vector, xpf, ninds)
+    return (m, P, nxs, weight_vector, xpf, ninds, weight_sum)
 end
 
 function apf_init(x::Vector{Float64}, P::Matrix{Float64}, n::Int64 = 5000)
@@ -159,13 +161,14 @@ function apf_step(
         x_den = H(selected_x[i, :])
         weight_vector[i] = pdf(MvNormal(x_num, R), y) / pdf(MvNormal(x_den, R), y)
     end
-
+    #calculates approximation of p(y_n|y_1:n-1) by summing weights as on pg196 Sarkaa BFaS
+    weight_sum = sum(weights .* prev_weights)
     weight_vector ./= sum(weight_vector)
 
     m = sum(weight_vector .* selected_x_sim, dims = 1)
     P = cov(weight_vector .* selected_x_sim, dims = 1)
 
-    return (m, P, selected_x_sim, weight_vector, selected_x_sim, sample_inds)
+    return (m, P, selected_x_sim, weight_vector, selected_x_sim, index_sample, weight_sum)
 end
 
 function rapid_mvn(x::Vector{Float64}, mu::Vector{Float64}, sigma::Matrix{Float64})
@@ -249,12 +252,14 @@ function iapf_step(
         weight_vector[i] /= sum(l_weight_vector .* pixty)
     end
 
+    #calculates approximation of p(y_n|y_1:n-1) by summing weights as on pg196 Sarkaa BFaS
+    weight_sum = sum(weight_vector .* prev_weights)
     weight_vector ./= sum(weight_vector)
 
     m = sum(weight_vector .* selected_x_sim, dims = 1)
     P = cov(weight_vector .* selected_x_sim, dims = 1)
 
-    return (m, P, selected_x_sim, weight_vector)
+    return (m, P, selected_x_sim, weight_vector, weight_sum)
 end
 
 #mh kernal for use on a per path basis
@@ -322,7 +327,6 @@ function resample_move_MH_pf_step(
     p_cov = sirres[2]
     samples = sirres[3]
     select_indices = sirres[6]
-
 end
 
 function sir_filter_ukfprop(
@@ -332,7 +336,8 @@ function sir_filter_ukfprop(
     y::Vector{Float64},
     R::Matrix{Float64},
     psi::Function,
-    H::Function,
+    H::Function;
+    llh::Bool = false
 )
     num_particles = size(x, 1)
     _xdim = size(x, 2)
@@ -341,18 +346,20 @@ function sir_filter_ukfprop(
 
     f_means = zeros(num_particles, _xdim)
     f_covs = zeros(num_particles, _xdim, _xdim)
-    for i = 1:num_particles
+    if llh
+        p_means = zeros(num_particles, _xdim)
+    end
+    @simd for i = 1:num_particles
         x_m = x[i, :]
         predicted_mean, predicted_cov = ukf_predict(x_m, P, psi, Q)
         filtered_mean, filtered_cov = ukf_update(predicted_mean, predicted_cov, y, H, R)
         filtered_cov = Matrix(Hermitian(filtered_cov))
         f_means[i, :] = filtered_mean
         f_covs[i, :, :] = filtered_cov
+        if llh
+            p_means[i, :] = predicted_mean
+        end
     end
-
-
-
-
 
     # proposal_samples = rand(proposal_dist, num_particles)
     # proposal_samples = Matrix(transpose(proposal_samples))
@@ -381,6 +388,9 @@ function sir_filter_ukfprop(
     cst = maximum(log_weights)
     weights = exp.(log_weights .- cst)
     # weights .+= eps(Float64)
+
+    #calculates approximation of p(y_n|y_1:n-1) by summing weights as on pg196 Sarkaa BFaS (previous weights equal)
+    weight_sum = sum(weights) / num_particles
     weights ./= sum(weights)
 
     sample_inds = wsample(1:num_particles, weights, num_particles)
@@ -393,5 +403,23 @@ function sir_filter_ukfprop(
     # mn = mean(proposal_samples, dims = 1)
     # Pn = cov(selected_samples, dims = 1)
 
-    return (mn, Pn, selected_samples, weights, selected_samples, sample_inds)
+    log_lik = 0.
+    if llh
+        for i = 1:num_particles
+            current_state = x[i,:]
+            predictive_state = psi(current_state)
+            predictive_obs = H(predictive_state)
+
+            current_state_dist = MvNormal(predictive_state, process_cov)
+            obs_dist = MvNormal(predictive_obs, obs_cov)
+
+            lh = logpdf(obs_dist, current_obs) + logpdf(current_state_dist, current_state)
+            log_lik += lh
+        end
+        log_lik /= num_particles
+    end
+
+
+
+    return (mn, Pn, selected_samples, weights, selected_samples, sample_inds, weight_sum, log_lik)
 end
