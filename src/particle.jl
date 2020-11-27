@@ -278,16 +278,16 @@ function mh_kernel(
     _T = size(resampled_path, 2)
 
     jittered_path = copy(resampled_path)
-    det_q = det(e_cov)
-    H_distn = MvNormal(Q)
+    # det_q = det(e_cov)
+    # H_distn = MvNormal(Q)
 
     for m = 1:mh_steps
-        @info("Metropolis Step")
-        # H = 2. .* randn(_xdim, lag)
-        H = zeros(_xdim, lag)
-        for i = 1:lag
-            H[:,i] = rand(H_distn)
-        end
+        # @info("Metropolis Step")
+        H = 2. .* randn(_xdim, lag)
+        # H = zeros(_xdim, lag)
+        # for i = 1:lag
+        #     H[:,i] = rand(H_distn)
+        # end
 
         mh_proposal = copy(jittered_path)
         mh_proposal[:, (_T-lag+1):_T] .+= H
@@ -351,13 +351,13 @@ function resample_move_MH_pf_step(
     for i = 1:num_particles
         # @info(resampled_paths[i,:,:])
         resampled_paths[i, :, :] =
-            mh_kernel(copy(resampled_paths[i, :, :]), obs_hist, psi, H, Q, R, lag, mh_steps, e_cov = p_cov)
+            mh_kernel(resampled_paths[i, :, :], obs_hist, psi, H, Q, R, lag, mh_steps, e_cov = p_cov)
     end
 
     # p_mean = sum(inv(num_particles) .* resampled_paths[:, :, t], dims = 1)
     # p_cov = cov(inv(num_particles) .* resampled_paths[:, :, t], dims = 1)
 
-    samples = resampled_paths[:, :, t]
+    samples = resampled_paths[:, :, end]
     p_mean = sum(weights .* samples, dims = 1)
     p_cov = cov(weights .* samples, dims = 1)
 
