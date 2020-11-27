@@ -100,7 +100,7 @@ function bsf_step(
         xi = @views xob[i, :]
         weight_vector[i] = pdf(MvNormal(xi, R), y)
     end
-    weight_vector .+= eps(Float64) #for starbility reasons
+    weight_vector .+= eps(Float64) #for stability reasons
     #calculates approximation of p(y_n|y_1:n-1) by summing weights as on pg196 Sarkaa BFaS (previous weights equal)
     weight_sum = sum(weights) / num_particles
     weight_vector ./= sum(weight_vector)
@@ -271,21 +271,28 @@ function mh_kernel(
     Q::Matrix{Float64},
     R::Matrix{Float64},
     lag::Int64,
-    mh_steps::Int64,
+    mh_steps::Int64;
+    e_cov,
 )
     _xdim = size(resampled_path, 1)
     _T = size(resampled_path, 2)
 
-    jittered_path = resampled_path
+    jittered_path = copy(resampled_path)
+    det_q = det(e_cov)
+    H_distn = MvNormal(Q)
 
     for m = 1:mh_steps
-        H = randn(_xdim, lag)
-        mh_proposal = jittered_path
+        @info("Metropolis Step")
+        # H = 2. .* randn(_xdim, lag)
+        H = zeros(_xdim, lag)
+        for i = 1:lag
+            H[:,i] = rand(H_distn)
+        end
+
+        mh_proposal = copy(jittered_path)
         mh_proposal[:, (_T-lag+1):_T] .+= H
-        println(mh_proposal[:, 3])
-        println(H_func(mh_proposal[:, 3]))
-        acc_num = 1.0
-        acc_den = 1.0
+        l_acc_num = 0.0
+        l_acc_den = 0.0
 
         for k = (_T-lag+1):_T
             f_num = MvNormal(psi(mh_proposal[:, k-1]), Q)
@@ -294,20 +301,21 @@ function mh_kernel(
             g_num = MvNormal(H_func(mh_proposal[:, k]), R)
             g_den = MvNormal(H_func(jittered_path[:, k]), R)
 
-            acc_num *= pdf(f_num, mh_proposal[:, k]) * pdf(g_num, obs_hist[:, k])
-            acc_den *= pdf(f_den, jittered_path[:, k]) * pdf(g_den, obs_hist[:, k])
+            l_acc_num += logpdf(f_num, mh_proposal[:, k]) + logpdf(g_num, obs_hist[:, k])
+            l_acc_den += logpdf(f_den, jittered_path[:, k]) + logpdf(g_den, obs_hist[:, k])
         end
 
-        acc_rat = acc_num / acc_den
+        l_acc_rat = l_acc_num - l_acc_den
         _a = rand()
-        if _a <= acc_rat
-            jittered_path = mh_proposal
+        if log(_a) <= l_acc_rat
+            jittered_path = copy(mh_proposal)
         end
     end
 
     return jittered_path
 end
 
+# busted
 function resample_move_MH_pf_step(
     x::Matrix{Float64},
     P::Matrix{Float64},
@@ -322,11 +330,38 @@ function resample_move_MH_pf_step(
     mh_steps::Int64,
 )
 
+    t = size(all_particles, 3)
+    num_particles = size(x, 1)
     sirres = sir_filter_ukfprop(x, P, Q, y, R, psi, H)
     p_mean = sirres[1]
     p_cov = sirres[2]
     samples = sirres[3]
-    select_indices = sirres[6]
+    weights = sirres[4]
+    weight_sum = sirres[6]
+    select_indices = sirres[5]
+
+    resampled_paths = cat(all_particles[select_indices, :, :], samples, dims = 3)
+
+    if t <= lag
+        return (sirres...,  resampled_paths)
+    end
+
+
+    obs_hist = cat(all_obs, y, dims = 2)
+    for i = 1:num_particles
+        # @info(resampled_paths[i,:,:])
+        resampled_paths[i, :, :] =
+            mh_kernel(copy(resampled_paths[i, :, :]), obs_hist, psi, H, Q, R, lag, mh_steps, e_cov = p_cov)
+    end
+
+    # p_mean = sum(inv(num_particles) .* resampled_paths[:, :, t], dims = 1)
+    # p_cov = cov(inv(num_particles) .* resampled_paths[:, :, t], dims = 1)
+
+    samples = resampled_paths[:, :, t]
+    p_mean = sum(weights .* samples, dims = 1)
+    p_cov = cov(weights .* samples, dims = 1)
+
+    return (p_mean, p_cov, samples, weights, select_indices, weight_sum, resampled_paths)
 end
 
 function sir_filter_ukfprop(
@@ -337,7 +372,6 @@ function sir_filter_ukfprop(
     R::Matrix{Float64},
     psi::Function,
     H::Function;
-    llh::Bool = false
 )
     num_particles = size(x, 1)
     _xdim = size(x, 2)
@@ -346,19 +380,15 @@ function sir_filter_ukfprop(
 
     f_means = zeros(num_particles, _xdim)
     f_covs = zeros(num_particles, _xdim, _xdim)
-    if llh
-        p_means = zeros(num_particles, _xdim)
-    end
+    sqrtP = sqrt(P)
+
     @simd for i = 1:num_particles
-        x_m = x[i, :]
-        predicted_mean, predicted_cov = ukf_predict(x_m, P, psi, Q)
+        x_m = copy(x[i, :])
+        predicted_mean, predicted_cov = ukf_predict_sqrt(x_m, sqrtP, psi, Q)
         filtered_mean, filtered_cov = ukf_update(predicted_mean, predicted_cov, y, H, R)
         filtered_cov = Matrix(Hermitian(filtered_cov))
         f_means[i, :] = filtered_mean
         f_covs[i, :, :] = filtered_cov
-        if llh
-            p_means[i, :] = predicted_mean
-        end
     end
 
     # proposal_samples = rand(proposal_dist, num_particles)
@@ -385,8 +415,9 @@ function sir_filter_ukfprop(
         log_weights[i] =
             logpdf(model_dist, _x) + logpdf(obs_dist, y) - logpdf(proposal_dist, _x)
     end
-    cst = maximum(log_weights)
-    weights = exp.(log_weights .- cst)
+    # cst = maximum(log_weights)
+    # weights = exp.(log_weights .- cst)
+    weights = exp.(log_weights)
     # weights .+= eps(Float64)
 
     #calculates approximation of p(y_n|y_1:n-1) by summing weights as on pg196 Sarkaa BFaS (previous weights equal)
@@ -403,23 +434,6 @@ function sir_filter_ukfprop(
     # mn = mean(proposal_samples, dims = 1)
     # Pn = cov(selected_samples, dims = 1)
 
-    log_lik = 0.
-    if llh
-        for i = 1:num_particles
-            current_state = x[i,:]
-            predictive_state = psi(current_state)
-            predictive_obs = H(predictive_state)
 
-            current_state_dist = MvNormal(predictive_state, process_cov)
-            obs_dist = MvNormal(predictive_obs, obs_cov)
-
-            lh = logpdf(obs_dist, current_obs) + logpdf(current_state_dist, current_state)
-            log_lik += lh
-        end
-        log_lik /= num_particles
-    end
-
-
-
-    return (mn, Pn, selected_samples, weights, selected_samples, sample_inds, weight_sum, log_lik)
+    return (mn, Pn, selected_samples, weights, sample_inds, weight_sum)
 end

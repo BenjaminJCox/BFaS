@@ -215,6 +215,23 @@ function ukf_generate_sigma_points(
     return sigma_point_matrix
 end
 
+function ukf_generate_sigma_points_sqrt(
+    x::Vector{Float64},
+    sqrtP::Matrix{Float64};
+    alpha::Float64 = 1.0,
+    kappa::Float64 = 3.0 - size(x, 1),
+)
+    n = size(x, 1)
+    sigma_point_matrix = zeros(size(x, 1), 2 * size(x, 1) + 1)
+    sigma_point_matrix[:, 1] = x
+    lambda = alpha^2 * (n + kappa) - n
+    for i = 1:n
+        sigma_point_matrix[:, i+1] = x + sqrt(n + lambda) * sqrtP[:, i]
+        sigma_point_matrix[:, i+1+n] = x - sqrt(n + lambda) * sqrtP[:, i]
+    end
+    return sigma_point_matrix
+end
+
 #this should get inlined but idec
 function ukf_propagate_sigma_points(sigma_point_matrix::Matrix{Float64}, f::Function = x -> x)
     mapped_sigma_points = mapslices(f, sigma_point_matrix, dims = 1)
@@ -319,6 +336,22 @@ function ukf_predict(
     return (mp, Pp)
 end
 
+function ukf_predict_sqrt(
+    x::Vector{Float64},
+    sqrtP::Matrix,
+    psi = x -> x,
+    Q = zeros(size(x, 1), size(x, 1));
+    alpha::Float64 = 1.0,
+    kappa::Float64 = 3.0 - size(x, 1),
+    beta::Float64 = 0.0,
+)
+    sigma_points = ukf_generate_sigma_points_sqrt(x, sqrtP; alpha = alpha, kappa = kappa)
+    mapped_sigma_points = ukf_propagate_sigma_points(sigma_points, psi)
+    weights = ukf_weights(size(x, 1); alpha = alpha, kappa = kappa, beta = beta)
+    (mp, Pp) = ukf_pred_mean_cv(mapped_sigma_points, weights, Q)
+    return (mp, Pp)
+end
+
 #=
 Input:
 x - Nx1 state mean of previous step
@@ -354,7 +387,30 @@ function ukf_update(
     Pk = P - Kk * Sk * Kk'
     return (mk, Pk, Kk, muk, Sk)
 end
+
+function ukf_update_sqrt(
+    x::Vector{Float64},
+    P::Matrix{Float64},
+    sqrtP::Matrix{Float64},
+    y::Vector{Float64},
+    H,
+    R::Matrix{Float64};
+    alpha::Float64 = 1.0,
+    kappa::Float64 = 3.0 - size(x, 1),
+    beta::Float64 = 0.0,
+)
+    sigma_points = ukf_generate_sigma_points_sqrt(x, sqrtP; alpha = alpha, kappa = kappa)
+    mapped_sigma_points = ukf_propagate_sigma_points(sigma_points, H)
+    weights = ukf_weights(size(x, 1); alpha = alpha, kappa = kappa, beta = beta)
+    (muk, Sk, Ck) = ukf_upda_mean_cvneas_ccv_statemeas(x, sigma_points, mapped_sigma_points, weights, R)
+    Kk = Ck / Sk
+    mk = x + Kk * (y - muk)
+    Pk = P - Kk * Sk * Kk'
+    return (mk, Pk, Kk, muk, Sk)
+end
 ##
+
+
 
 function rmse(truth::Matrix{Float64}, estimate::Matrix{Float64})
     T = size(truth, 2)

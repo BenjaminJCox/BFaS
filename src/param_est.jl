@@ -389,6 +389,6 @@ function marginal_lh(
     ))
 
     marg_lh = hcubature(unmarg_lh, state_lower, state_upper, initdiv = 5)
-    @info("Cubature Complete")
+    # @info("Cubature Complete")
     return marg_lh[1]
 end
