@@ -102,7 +102,7 @@ function bsf_step(
     end
     weight_vector .+= eps(Float64) #for stability reasons
     #calculates approximation of p(y_n|y_1:n-1) by summing weights as on pg196 Sarkaa BFaS (previous weights equal)
-    weight_sum = sum(weights) / num_particles
+    weight_sum = sum(weight_vector) / n
     weight_vector ./= sum(weight_vector)
     m = sum(weight_vector .* xpf, dims = 1)
     P = cov(xpf, dims = 1)

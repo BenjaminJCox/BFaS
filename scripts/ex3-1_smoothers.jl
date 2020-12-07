@@ -85,20 +85,20 @@ function ex3_1()
         # ef_arr[k+1] = ef_arr[k] + lh_arr[k]
         em, eP = ukf_predict(em, eP, psi, Q)
         em, eP = ukf_update(em, eP, [y[k]], Hf, hcat(R))
-        # m, P, nxs, wv, xpf = bsf_step(nxs, P, Q, [y[k]], hcat(R), psi, Hf)
+        m, P, nxs, wv, xpf = bsf_step(nxs, P, Q, [y[k]], hcat(R), psi, Hf)
         # m, P, nxs, wv, xpf = apf_step(nxs, Q, [y[k]], hcat(R), psi, Hf, wv)
         # ukf_return = sir_filter_ukfprop(nxs, P, Q, [y[k]], hcat(R), psi, Hf)
         # if k > 3
-        ukf_return = resample_move_MH_pf_step(nxs, P, Q, [y[k]], hcat(R), psi, Hf, sds[:,:,1:k-1], y_arr[:,1:k-1], 5, 2)
+        # ukf_return = resample_move_MH_pf_step(nxs, P, Q, [y[k]], hcat(R), psi, Hf, sds[:,:,1:k-1], y_arr[:,1:k-1], 5, 2)
         # end
-        m = ukf_return[1]
-        P = ukf_return[2]
-        nxs = ukf_return[3]
-        wv = ukf_return[4]
-        xpf = ukf_return[3]
-        lh_arr[k] = ukf_return[6]
-        s_inds = ukf_return[5]
-        rs_paths = ukf_return[7]
+        # m = ukf_return[1]
+        # P = ukf_return[2]
+        # nxs = ukf_return[3]
+        # wv = ukf_return[4]
+        # xpf = ukf_return[3]
+        # lh_arr[k] = ukf_return[6]
+        # s_inds = ukf_return[5]
+        # rs_paths = ukf_return[7]
         # println(m)
         # println(P)
 
@@ -108,7 +108,7 @@ function ex3_1()
         kl_P[:, :, k] = P
         wts[:, k] = wv
         # sds[:, :, 1:k] = sds[s_inds, :, 1:k]
-        sds[:, :, 1:k] = rs_paths
+        # sds[:, :, 1:k] = rs_paths
         sds[:, :, k] = xpf
         # sds[:, :, k] = nxs
     end
