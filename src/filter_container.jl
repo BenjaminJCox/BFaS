@@ -79,6 +79,9 @@ end
 
     num_particles::Int64 = 100
 
+    current_mean::Vector{Float64}
+    current_cov::Matrix{Float64}
+
     # eg for resample move give lag and mh kernel parameters
     filter_specific_parameters::Dict
 end
@@ -104,6 +107,9 @@ end
     ancestry::Array{Int64,2}
 
     num_particles::Int64 = 100
+
+    current_mean::Vector{Float64}
+    current_cov::Matrix{Float64}
 
     # eg for resample move give lag and mh kernel parameters
     filter_specific_parameters::Dict
@@ -145,6 +151,8 @@ function make_pf_wT(
         filter_specific_parameters = filter_specific_parameters,
         num_particles = num_particles,
         ancestry = ancestry,
+        current_mean = SSM.p0,
+        current_cov = SSM.P,
     )
 end
 

@@ -238,6 +238,12 @@ function ukf_propagate_sigma_points(sigma_point_matrix::Matrix{Float64}, f::Func
     return mapped_sigma_points
 end
 
+function ukf_propagate_sigma_points_param(sigma_point_matrix::Matrix{Float64}, f::Function, parameters)
+    f_p(x) = f(x, parameters)
+    mapped_sigma_points = mapslices(f_p, sigma_point_matrix, dims = 1)
+    return mapped_sigma_points
+end
+
 function ukf_weights(n::Int64; alpha::Float64 = 1.0, kappa::Float64 = 3.0 - size(x, 1), beta::Float64 = 0.0)
     weight_m_vector = ones(2n + 1)
     weight_c_vector = ones(2n + 1)
@@ -352,6 +358,23 @@ function ukf_predict_sqrt(
     return (mp, Pp)
 end
 
+function ukf_predict_sqrt_param(
+    x::Vector{Float64},
+    sqrtP::Matrix,
+    psi = x -> x,
+    Q = zeros(size(x, 1), size(x, 1)),
+    parameters = Dict{Symbol,Any}();
+    alpha::Float64 = 1.0,
+    kappa::Float64 = 3.0 - size(x, 1),
+    beta::Float64 = 0.0,
+)
+    sigma_points = ukf_generate_sigma_points_sqrt(x, sqrtP; alpha = alpha, kappa = kappa)
+    mapped_sigma_points = ukf_propagate_sigma_points_param(sigma_points, psi, parameters)
+    weights = ukf_weights(size(x, 1); alpha = alpha, kappa = kappa, beta = beta)
+    (mp, Pp) = ukf_pred_mean_cv(mapped_sigma_points, weights, Q)
+    return (mp, Pp)
+end
+
 #=
 Input:
 x - Nx1 state mean of previous step
@@ -380,6 +403,27 @@ function ukf_update(
 )
     sigma_points = ukf_generate_sigma_points(x, P; alpha = alpha, kappa = kappa)
     mapped_sigma_points = ukf_propagate_sigma_points(sigma_points, H)
+    weights = ukf_weights(size(x, 1); alpha = alpha, kappa = kappa, beta = beta)
+    (muk, Sk, Ck) = ukf_upda_mean_cvneas_ccv_statemeas(x, sigma_points, mapped_sigma_points, weights, R)
+    Kk = Ck / Sk
+    mk = x + Kk * (y - muk)
+    Pk = P - Kk * Sk * Kk'
+    return (mk, Pk, Kk, muk, Sk)
+end
+
+function ukf_update_param(
+    x::Vector{Float64},
+    P::Matrix{Float64},
+    y::Vector{Float64},
+    H,
+    R::Matrix{Float64},
+    parameters;
+    alpha::Float64 = 1.0,
+    kappa::Float64 = 3.0 - size(x, 1),
+    beta::Float64 = 0.0,
+)
+    sigma_points = ukf_generate_sigma_points(x, P; alpha = alpha, kappa = kappa)
+    mapped_sigma_points = ukf_propagate_sigma_points_param(sigma_points, H, parameters)
     weights = ukf_weights(size(x, 1); alpha = alpha, kappa = kappa, beta = beta)
     (muk, Sk, Ck) = ukf_upda_mean_cvneas_ccv_statemeas(x, sigma_points, mapped_sigma_points, weights, R)
     Kk = Ck / Sk
