@@ -162,7 +162,7 @@ function apf_step(
         weight_vector[i] = pdf(MvNormal(x_num, R), y) / pdf(MvNormal(x_den, R), y)
     end
     #calculates approximation of p(y_n|y_1:n-1) by summing weights as on pg196 Sarkaa BFaS
-    weight_sum = sum(weights .* prev_weights)
+    weight_sum = sum(weight_vector .* prev_weights)
     weight_vector ./= sum(weight_vector)
 
     m = sum(weight_vector .* selected_x_sim, dims = 1)

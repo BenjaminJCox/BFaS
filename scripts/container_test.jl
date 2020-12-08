@@ -6,7 +6,10 @@ include(srcdir("kf.jl"))
 include(srcdir("particle.jl"))
 include(srcdir("smoothers.jl"))
 include(srcdir("param_est.jl"))
-include(srcdir("container_filters.jl"))
+include(srcdir("modulator.jl"))
+using .containers
+
+gr()
 
 
 Random.seed!(3)
@@ -16,12 +19,12 @@ function container_test()
     function psi(x, p)
         nx = copy(x)
         nx[1] = x[1] + x[2]
-        nx[2] = -(abs((x[1] - 10))) * sign(x[1] - 10)
+        nx[2] = -cbrt(abs((x[1] - 10))) * sign(x[1] - 10)
         return nx
     end
     H = [1.0 0.0]
     Q = [1.0/10^2 0.0; 0.0 1.0^2]
-    R = hcat([5.0^2])
+    R = hcat([2.0^2])
 
     T = 150
 
@@ -46,10 +49,10 @@ function container_test()
     params = Dict{Symbol,Any}()
     ao_SSM = containers.make_gaussian_ssm(psi, Hf, Q, R, m0, P, params, 2, 1)
 
-    filter = init_BPF_kT(ao_SSM, T, num_particles = 1000)
+    filter = containers.init_BPF_kT(ao_SSM, T, num_particles = 1000)
     kl_m = zeros(2, T)
     for t in 1:T
-        SIR_ExKF_kT_step!(filter, t, [y[t]])
+        containers.BPF_kT_step!(filter, t, [y[t]])
         kl_m[:, t] = filter.current_mean
     end
     return @dict filter x y kl_m T
@@ -60,10 +63,13 @@ x = op[:x]
 y = op[:y]
 km = op[:kl_m]
 T = op[:T]
+filter = op[:filter]
 
 umf = rmse(x, km)
 @info("Filter RMSE:", umf)
+a_ef = containers.approx_energy_function(filter)[end]
+@info("Approximate Energy: ", a_ef)
 
 plot(1:T, x[1, :], size = (750, 500), label = "Truth", legend=:outertopright)
 plot!(1:T, y, label = "Observations", st = :scatter)
-plot!(1:T, km[1, :], label = "Filter Mean")
+plot!(1:T, km[1, :], label = "BPF Filter Mean")

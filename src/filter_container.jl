@@ -1,4 +1,3 @@
-module containers
 using Parameters
 using Distributions
 using LinearAlgebra
@@ -81,6 +80,7 @@ end
 
     current_mean::Vector{Float64}
     current_cov::Matrix{Float64}
+    likelihood::Vector{Float64}
 
     # eg for resample move give lag and mh kernel parameters
     filter_specific_parameters::Dict
@@ -110,6 +110,7 @@ end
 
     current_mean::Vector{Float64}
     current_cov::Matrix{Float64}
+    likelihood::Vector{Float64}
 
     # eg for resample move give lag and mh kernel parameters
     filter_specific_parameters::Dict
@@ -136,6 +137,7 @@ function make_pf_wT(
     historic_observations = Array{Float64,2}(undef, obs_dim, T)
 
     ancestry = Array{Int64,2}(undef, num_particles, T+1)
+    likelihood = Vector{Float64}(undef, T)
 
     return gaussian_ssm_particle_filter_known_T(
         SSM = SSM,
@@ -153,7 +155,6 @@ function make_pf_wT(
         ancestry = ancestry,
         current_mean = SSM.p0,
         current_cov = SSM.P,
+        likelihood = likelihood,
     )
-end
-
 end
