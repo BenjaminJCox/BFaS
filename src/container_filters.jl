@@ -8,6 +8,35 @@ using StatsBase
 include(srcdir("kf.jl")) # for proposals
 include(srcdir("filter_container.jl"))
 
+function rapid_mvn_prec(
+    x::Vector{Float64},
+    mu::Vector{Float64},
+    i_sigma::Matrix{Float64},
+    isq_d_sigma::Float64,
+)
+    k = length(mu)
+
+    t1 = (2π)^(-k / 2)
+    t2 = isq_d_sigma
+    lt3 = transpose(x - mu) * i_sigma * (x - mu)
+    t3 = exp(-0.5 * lt3)
+    return (t1 * t2 * t3)
+end
+
+function log_rapid_mvn_prec(
+    x::Vector{Float64},
+    mu::Vector{Float64},
+    i_sigma::Matrix{Float64},
+    l_isq_d_sigma::Float64,
+)
+    k = length(mu)
+
+    t1 = (-k / 2) .* log(2π)
+    lt3 = transpose(x - mu) * i_sigma * (x - mu)
+    t3 = -0.5 * lt3
+    return (t1 + l_isq_d_sigma + t3)
+end
+
 function init_BPF_kT(
     SSM::containers.state_space_model_gaussian,
     T::Int64;
@@ -98,16 +127,30 @@ function SIR_ExKF_kT_step!(
 
     @simd for i = 1:filter.num_particles
         # x_m = filter.current_particles[:, i]
-        predicted_mean, predicted_cov = exkf_predict(filter.current_particles[:, i], Matrix(filter.SSM.P), f_map, Matrix(filter.SSM.Q))
-        filtered_mean, filtered_cov = exkf_update(predicted_mean, predicted_cov, observation, g_map, Matrix(filter.SSM.R))
+        predicted_mean, predicted_cov = exkf_predict(
+            filter.current_particles[:, i],
+            Matrix(filter.SSM.P),
+            f_map,
+            Matrix(filter.SSM.Q),
+        )
+        filtered_mean, filtered_cov = exkf_update(
+            predicted_mean,
+            predicted_cov,
+            observation,
+            g_map,
+            Matrix(filter.SSM.R),
+        )
         filtered_cov = Matrix(Hermitian(filtered_cov))
         prop_dist = MvNormal(filtered_mean, filtered_cov)
 
         # imp_y = g_map(xp)
-        model_dist = MvNormal(f_map(filter.current_particles[:,i]), Matrix(filter.SSM.Q))
+        model_dist = MvNormal(f_map(filter.current_particles[:, i]), Matrix(filter.SSM.Q))
         filter.current_particles[:, i] = rand(prop_dist)
         obs_dist = MvNormal(g_map(filter.current_particles[:, i]), Matrix(filter.SSM.R))
-        filter.current_weights[i] = logpdf(model_dist, filter.current_particles[:, i]) + logpdf(obs_dist, observation) - logpdf(prop_dist, filter.current_particles[:, i])
+        filter.current_weights[i] =
+            logpdf(model_dist, filter.current_particles[:, i]) +
+            logpdf(obs_dist, observation) -
+            logpdf(prop_dist, filter.current_particles[:, i])
     end
 
     filter.current_weights .= exp.(filter.current_weights)
@@ -215,11 +258,17 @@ function APF_kT_step!(
     x_pred_obs = mapslices(g_map, x_pred, dims = 1)
     pert_dist = MvNormal(Matrix(filter.SSM.Q))
 
+    i_R = Matrix(inv(filter.SSM.R))
+    i_sq_d_R = inv(sqrt(det(filter.SSM.R)))
+    l_i_sq_d_R = log(i_sq_d_R)
+
+    pws = zeros(filter.num_particles)
     for i = 1:filter.num_particles
-        filter.current_weights[i] =
-            pdf(MvNormal(x_pred_obs[:, i], Matrix(filter.SSM.R)), observation) *
-            filter.historic_weights[i, t]
+        # pws[i] = pdf(MvNormal(x_pred_obs[:, i], Matrix(filter.SSM.R)), observation)
+        pws[i] = rapid_mvn_prec(observation, x_pred_obs[:, i], i_R, i_sq_d_R)
+        filter.current_weights[i] = pws[i] .* filter.historic_weights[i, t]
     end
+    preweights = filter.current_weights
 
     filter.current_weights ./= sum(filter.current_weights)
     selected_indices =
@@ -230,12 +279,13 @@ function APF_kT_step!(
         filter.current_particles[:, i] .= f_map(selected_particles[:, i]) .+ rand(pert_dist)
     end
 
+
     for i = 1:filter.num_particles
         x_num = g_map(filter.current_particles[:, i])
-        x_den = g_map(selected_particles[:, i])
+        x_den = g_map(f_map(selected_particles[:, i]))
         filter.current_weights[i] =
-            logpdf(MvNormal(x_num, Matrix(filter.SSM.R)), observation) -
-            logpdf(MvNormal(x_den, Matrix(filter.SSM.R)), observation)
+            log_rapid_mvn_prec(observation, x_num, i_R, l_i_sq_d_R) -
+            log_rapid_mvn_prec(observation, x_den, i_R, l_i_sq_d_R)
     end
 
     filter.current_weights .= exp.(filter.current_weights)
@@ -246,7 +296,10 @@ function APF_kT_step!(
     filter.current_cov = cov(filter.current_particles .* norm_weights', dims = 2)
     filter.historic_particles[:, :, t+1] = filter.current_particles
     filter.historic_weights[:, t+1] = filter.current_weights
-    filter.likelihood[t] = sum(filter.current_weights .* filter.historic_weights[:, t]) ./ sum(filter.historic_weights[:, t])
+    # filter.likelihood[t] = sum(filter.current_weights .* filter.historic_weights[selected_indices, t]) ./ sum(filter.historic_weights[selected_indices, t])
+    filter.likelihood[t] =
+        inv(filter.num_particles) .* sum(filter.current_weights) .*
+        sum((filter.historic_weights[:, t] ./ sum(filter.historic_weights[:, t])) .* pws)
     return filter
 end
 

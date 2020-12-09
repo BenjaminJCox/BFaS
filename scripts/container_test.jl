@@ -52,7 +52,7 @@ function container_test()
     filter = containers.init_BPF_kT(ao_SSM, T, num_particles = 1000)
     kl_m = zeros(2, T)
     for t in 1:T
-        containers.BPF_kT_step!(filter, t, [y[t]])
+        containers.APF_kT_step!(filter, t, [y[t]])
         kl_m[:, t] = filter.current_mean
     end
     return @dict filter x y kl_m T
@@ -67,9 +67,9 @@ filter = op[:filter]
 
 umf = rmse(x, km)
 @info("Filter RMSE:", umf)
-a_ef = containers.approx_energy_function(filter)[end]
-@info("Approximate Energy: ", a_ef)
+a_ef = containers.approx_energy_function(filter)
+@info("Approximate Energy: ", a_ef[end])
 
 plot(1:T, x[1, :], size = (750, 500), label = "Truth", legend=:outertopright)
 plot!(1:T, y, label = "Observations", st = :scatter)
-plot!(1:T, km[1, :], label = "BPF Filter Mean")
+plot!(1:T, km[1, :], label = "APF Filter Mean")
