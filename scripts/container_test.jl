@@ -9,12 +9,12 @@ include(srcdir("param_est.jl"))
 include(srcdir("modulator.jl"))
 using .containers
 
-# gr()
+gr()
 
 
-Random.seed!(3)
+Random.seed!(012)
 # gr()
-plotlyjs()
+# plotlyjs()
 function container_test()
     function psi(x, p)
         nx = copy(x)
@@ -53,7 +53,9 @@ function container_test()
     kl_m = zeros(2, T)
     kl_V = zeros(2, T)
     for t in 1:T
-        containers.APF_kT_step!(filter, t, [y[t]])
+        # containers.SIR_ExKF_kT_step!(filter, t, [y[t]])
+        containers.BPF_kT_step!(filter, t, [y[t]])
+        # containers.APF_kT_step!(filter, t, [y[t]])
         kl_m[:, t] = filter.current_mean
         kl_V[1, t] = filter.current_cov[1,1]
         kl_V[2, t] = filter.current_cov[2,2]
@@ -103,9 +105,9 @@ function mul_container_test()
     kl_m = zeros(T)
     kl_V = zeros(T)
     for t in 1:T
-        containers.SIR_ExKF_kT_step!(filter, t, [y[t]])
+        # containers.SIR_ExKF_kT_step!(filter, t, [y[t]])
         # containers.BPF_kT_step!(filter, t, [y[t]])
-        # containers.APF_kT_step!(filter, t, [y[t]])
+        containers.APF_kT_step!(filter, t, [y[t]])
         kl_m[t] = filter.current_mean[1]
         kl_V[t] = filter.current_cov[1, 1]
     end
@@ -128,7 +130,7 @@ end
 #
 # plot(1:T, x[1, :], size = (750, 500), label = "Truth", legend=:outertopright)
 # plot!(1:T, y, label = "Observations", st = :scatter)
-# plot!(1:T, km[1, :], label = "APF Filter Mean", ribbon = sqrt.(kv[1,:]))
+# plot!(1:T, km[1, :], label = "Filter Mean", ribbon = sqrt.(kv[1,:]))
 
 mul = mul_container_test()
 x = mul[:x]
@@ -136,14 +138,14 @@ y = mul[:y]
 km = mul[:kl_m]
 kv = mul[:kl_V]
 T = mul[:T]
-filter = op[:filter]
+filter = mul[:filter]
 
-# umf = rmse(x, km)
-# @info("Filter RMSE:", umf)
-# a_ef = containers.approx_energy_function(filter)
-# @info("Approximate Energy: ", a_ef[end])
+umf = rmse(x, km)
+@info("Filter RMSE:", umf)
+a_ef = containers.approx_energy_function(filter)
+@info("Approximate Energy: ", a_ef[end])
 
 p1 = plot(1:T, x, size = (750, 500), label = "Truth")
 plot!(1:T, km, label = "Filter Mean", ribbon = sqrt.(kv))
-# p2 = plot(1:T, y, label = "Observations")
-# plot(p1, p2, layout = (2, 1), legend=:outertopright, size = (750, 500), link = :x)
+p2 = plot(1:T, y, label = "Observations")
+plot(p1, p2, layout = (1, 2), size = (1250, 500), link = :x)

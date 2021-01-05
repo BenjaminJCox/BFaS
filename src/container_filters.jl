@@ -135,13 +135,14 @@ function BPF_kT_step!(
     for i = 1:filter.num_particles
         xp =
             filter.SSM.f(filter.current_particles[:, i], rand(pert_dist), filter.SSM.ssm_parameters)
+
         filter.current_particles[:, i] .= xp
 
         # @views h_xk = filter.SSM.mul_g(filter.current_particles[:, i], obs_ov, filter.SSM.ssm_parameters)
         # @views v_r = filter.SSM.add_g(filter.current_particles[:, i], obs_ov, filter.SSM.ssm_parameters) .- filter.SSM.add_g(filter.current_particles[:, i], obs_zv, filter.SSM.ssm_parameters)
         # obs_cov = h_xk * filter.SSM.R * transpose(v_r) + v_r * filter.SSM.R * transpose(h_xk) + 2.0 .* v_r * filter.SSM.R * transpose(v_r) + 2.0 .* h_xk * filter.SSM.R * transpose(h_xk)
         # obs_cov = Matrix(Hermitian(obs_cov))
-        obs_cov = cov_from_addmul(filter.SSM.add_g, filter.SSM.mul_g, filter.current_particles[:, i], length(observation), filter.SSM.R, filter.SSM.ssm_parameters)
+        obs_cov = cov_from_addmul(filter.SSM.add_g, filter.SSM.mul_g, xp, length(observation), filter.SSM.R, filter.SSM.ssm_parameters)
         filter.current_weights[i] = pdf(MvNormal(filter.SSM.g(xp, obs_zv, filter.SSM.ssm_parameters), obs_cov), observation)
     end
 
@@ -258,7 +259,7 @@ function SIR_ExKF_kT_step!(
 
         obs_cov = cov_from_addmul(filter.SSM.add_g, filter.SSM.mul_g, filter.current_particles[:, i], length(observation), filter.SSM.R, filter.SSM.ssm_parameters)
 
-        sta_cov = cov_from_addmul(filter.SSM.add_f, filter.SSM.mul_f, filter.current_particles[:, i], length(observation), filter.SSM.Q, filter.SSM.ssm_parameters)
+        sta_cov = cov_from_addmul(filter.SSM.add_f, filter.SSM.mul_f, filter.current_particles[:, i], length(filter.current_mean), filter.SSM.Q, filter.SSM.ssm_parameters)
 
         # imp_y = g_map(xp)
         model_dist = MvNormal(f_map(filter.current_particles[:, i], sta_zv), sta_cov)
@@ -370,6 +371,7 @@ function APF_kT_step!(
 )
     f_map(x) = filter.SSM.f(x, filter.SSM.ssm_parameters)
     g_map(x) = filter.SSM.g(x, filter.SSM.ssm_parameters)
+    filter.t = t
 
     x_pred = mapslices(f_map, filter.current_particles, dims = 1)
     x_pred_obs = mapslices(g_map, x_pred, dims = 1)
@@ -428,14 +430,15 @@ function APF_kT_step!(
 )
     f_map(x, q) = filter.SSM.f(x, q, filter.SSM.ssm_parameters)
     g_map(x, r) = filter.SSM.g(x, r, filter.SSM.ssm_parameters)
+    filter.t = t
 
     sta_zv = zeros(length(filter.current_mean))
     obs_zv = zeros(length(observation))
     sta_ov = ones(length(filter.current_mean))
     obs_ov = ones(length(observation))
 
-    _ms_f(x) = f_map(x, sta_ov)
-    _ms_g(x) = g_map(x, obs_ov)
+    _ms_f(x) = f_map(x, sta_zv)
+    _ms_g(x) = g_map(x, obs_zv)
 
     x_pred = mapslices(_ms_f, filter.current_particles, dims = 1)
     x_pred_obs = mapslices(_ms_g, x_pred, dims = 1)
@@ -447,14 +450,11 @@ function APF_kT_step!(
 
     pws = zeros(filter.num_particles)
     for i = 1:filter.num_particles
-        @views h_xk = filter.SSM.mul_g(x_pred[:, i], obs_ov, filter.SSM.ssm_parameters)
-        @views v_r = filter.SSM.add_g(x_pred[:, i], obs_ov, filter.SSM.ssm_parameters) .- filter.SSM.add_g(x_pred[:, i], obs_zv, filter.SSM.ssm_parameters)
-        obs_cov = h_xk * filter.SSM.R * transpose(v_r) + v_r * filter.SSM.R * transpose(h_xk) + 2.0 .* v_r * filter.SSM.R * transpose(v_r) + 2.0 .* h_xk * filter.SSM.R * transpose(h_xk)
-
+        obs_cov = cov_from_addmul(filter.SSM.add_g, filter.SSM.mul_g, x_pred[:, i], length(observation), filter.SSM.R, filter.SSM.ssm_parameters)
         pws[i] = pdf(MvNormal(x_pred_obs[:, i], obs_cov), observation)
         filter.current_weights[i] = pws[i] .* filter.historic_weights[i, t]
     end
-    preweights = filter.current_weights
+    # preweights = filter.current_weights
 
     filter.current_weights ./= sum(filter.current_weights)
     selected_indices =
@@ -471,13 +471,17 @@ function APF_kT_step!(
         x_d_fc = f_map(selected_particles[:, i], sta_zv)
         x_den = g_map(x_d_fc, obs_zv)
 
-        @views h_xk = filter.SSM.mul_g(filter.current_particles[:, i], obs_ov, filter.SSM.ssm_parameters)
-        @views v_r = filter.SSM.add_g(filter.current_particles[:, i], obs_ov, filter.SSM.ssm_parameters) .- filter.SSM.add_g(filter.current_particles[:, i], obs_zv, filter.SSM.ssm_parameters)
-        num_cov = h_xk * filter.SSM.R * transpose(v_r) + v_r * filter.SSM.R * transpose(h_xk) + 2.0 .* v_r * filter.SSM.R * transpose(v_r) + 2.0 .* h_xk * filter.SSM.R * transpose(h_xk)
+        num_cov = cov_from_addmul(filter.SSM.add_g, filter.SSM.mul_g, filter.current_particles[:, i], length(observation), filter.SSM.R, filter.SSM.ssm_parameters)
 
-        @views h_xk = filter.SSM.mul_g(x_d_fc, obs_ov, filter.SSM.ssm_parameters)
-        @views v_r = filter.SSM.add_g(x_d_fc, obs_ov, filter.SSM.ssm_parameters) .- filter.SSM.add_g(x_d_fc, obs_zv, filter.SSM.ssm_parameters)
-        den_cov = h_xk * filter.SSM.R * transpose(v_r) + v_r * filter.SSM.R * transpose(h_xk) + 2.0 .* v_r * filter.SSM.R * transpose(v_r) + 2.0 .* h_xk * filter.SSM.R * transpose(h_xk)
+        den_cov = cov_from_addmul(filter.SSM.add_g, filter.SSM.mul_g, x_d_fc, length(observation), filter.SSM.R, filter.SSM.ssm_parameters)
+
+        # @views h_xk = filter.SSM.mul_g(filter.current_particles[:, i], obs_ov, filter.SSM.ssm_parameters)
+        # @views v_r = filter.SSM.add_g(filter.current_particles[:, i], obs_ov, filter.SSM.ssm_parameters) .- filter.SSM.add_g(filter.current_particles[:, i], obs_zv, filter.SSM.ssm_parameters)
+        # num_cov = h_xk * filter.SSM.R * transpose(v_r) + v_r * filter.SSM.R * transpose(h_xk) + 2.0 .* v_r * filter.SSM.R * transpose(v_r) + 2.0 .* h_xk * filter.SSM.R * transpose(h_xk)
+        #
+        # @views h_xk = filter.SSM.mul_g(x_d_fc, obs_ov, filter.SSM.ssm_parameters)
+        # @views v_r = filter.SSM.add_g(x_d_fc, obs_ov, filter.SSM.ssm_parameters) .- filter.SSM.add_g(x_d_fc, obs_zv, filter.SSM.ssm_parameters)
+        # den_cov = h_xk * filter.SSM.R * transpose(v_r) + v_r * filter.SSM.R * transpose(h_xk) + 2.0 .* v_r * filter.SSM.R * transpose(v_r) + 2.0 .* h_xk * filter.SSM.R * transpose(h_xk)
 
         filter.current_weights[i] =
             logpdf(MvNormal(x_num, num_cov), observation) - logpdf(MvNormal(x_den, den_cov), observation)
