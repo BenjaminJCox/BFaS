@@ -1,6 +1,6 @@
 using Turing, Plots, Random
 
-plotlyjs()
+gr()
 
 
 function sv_x(x)

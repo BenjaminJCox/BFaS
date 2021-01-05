@@ -155,6 +155,19 @@ function exkf_predict(x::Vector{Float64}, P::Matrix, psi = x -> x, Q = zeros(siz
     Pp = jac * P * jac' + Q
     return (xp, Pp)
 end
+
+function exkf_predict_nonadd(x, P, f, Q)
+    _xdim = length(x)
+    _pnz = zeros(_xdim)
+    _f1(x) = f(x, _pnz)
+    _f2(q) = f(x, q)
+    Fx = ForwardDiff.jacobian(_f1, x)
+    Fq = ForwardDiff.jacobian(_f2, _pnz)
+
+    xp = f(x, _pnz)
+    Pp = Fx * P * Fx' + Fq * Q * Fq'
+    return (xp, Pp)
+end
 #=
 Input:
 x - Nx1 state mean of previous step
@@ -189,6 +202,22 @@ function exkf_update(x::Vector{Float64}, P::Matrix{Float64}, y::Vector{Float64},
     xp = x + K * v
     Pp = P - K * IS * K'
     return (xp, Pp, K, IM, IS)
+end
+
+function exkf_update_nonadd(x, P, y, h, R)
+    _ydim = length(y)
+    _onz = zeros(_ydim)
+    _h1(x) = h(x, _onz)
+    _h2(r) = h(x, r)
+    Hx = ForwardDiff.jacobian(_h1, x)
+    Hr = ForwardDiff.jacobian(_h2, _onz)
+
+    v = y .- h(x, _onz)
+    S = Hx * P * Hx' + Hr * R * Hr'
+    K = P * Hx' / S
+    xp = x + K * v
+    Pp = P - K * S * K'
+    return (xp, Pp)
 end
 ##
 #=
@@ -463,6 +492,20 @@ function rmse(truth::Matrix{Float64}, estimate::Matrix{Float64})
     mse = 0.
     for i = 1:T
         sre = truth[:, i] - estimate[:, i]
+        mse += sre' * sre
+    end
+    mse /= T
+    rmse = sqrt(mse)
+    return rmse
+end
+
+function rmse(truth::Vector{Float64}, estimate::Vector{Float64})
+    T = size(truth, 2)
+    @assert size(truth) == size(estimate)
+
+    mse = 0.
+    for i = 1:T
+        sre = truth[i] - estimate[i]
         mse += sre' * sre
     end
     mse /= T
