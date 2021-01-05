@@ -9,7 +9,7 @@ include(srcdir("param_est.jl"))
 include(srcdir("modulator.jl"))
 using .containers
 
-gr()
+# gr()
 
 
 Random.seed!(3)
@@ -105,6 +105,7 @@ function mul_container_test()
     for t in 1:T
         containers.SIR_ExKF_kT_step!(filter, t, [y[t]])
         # containers.BPF_kT_step!(filter, t, [y[t]])
+        # containers.APF_kT_step!(filter, t, [y[t]])
         kl_m[t] = filter.current_mean[1]
         kl_V[t] = filter.current_cov[1, 1]
     end
@@ -142,6 +143,7 @@ filter = op[:filter]
 # a_ef = containers.approx_energy_function(filter)
 # @info("Approximate Energy: ", a_ef[end])
 
-plot(1:T, x, size = (750, 500), label = "Truth", legend=:outertopright)
-# plot!(1:T, y, label = "Observations", st = :scatter)
-plot!(1:T, km, label = "BPF Filter Mean", ribbon = sqrt.(kv))
+p1 = plot(1:T, x, size = (750, 500), label = "Truth")
+plot!(1:T, km, label = "Filter Mean", ribbon = sqrt.(kv))
+# p2 = plot(1:T, y, label = "Observations")
+# plot(p1, p2, layout = (2, 1), legend=:outertopright, size = (750, 500), link = :x)
