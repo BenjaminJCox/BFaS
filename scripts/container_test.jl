@@ -82,7 +82,7 @@ function mul_container_test()
 
     Q = hcat([1.0])
     R = hcat([1.0])
-    T = 100
+    T = 200
 
     m0 = [0.0]
     P = hcat([2.0])
@@ -105,9 +105,9 @@ function mul_container_test()
     kl_m = zeros(T)
     kl_V = zeros(T)
     for t in 1:T
-        # containers.SIR_ExKF_kT_step!(filter, t, [y[t]])
+        containers.SIR_ExKF_kT_step!(filter, t, [y[t]])
         # containers.BPF_kT_step!(filter, t, [y[t]])
-        containers.APF_kT_step!(filter, t, [y[t]])
+        # containers.APF_kT_step!(filter, t, [y[t]])
         kl_m[t] = filter.current_mean[1]
         kl_V[t] = filter.current_cov[1, 1]
     end
@@ -148,4 +148,4 @@ a_ef = containers.approx_energy_function(filter)
 p1 = plot(1:T, x, size = (750, 500), label = "Truth")
 plot!(1:T, km, label = "Filter Mean", ribbon = sqrt.(kv))
 p2 = plot(1:T, y, label = "Observations")
-plot(p1, p2, layout = (1, 2), size = (1250, 500), link = :x)
+plot(p1, p2, layout = (2, 1), size = (1250, 500), link = :x, legend = false)
