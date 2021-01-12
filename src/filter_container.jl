@@ -130,10 +130,11 @@ end
     current_particles::Array{Float64,2}
     historic_particles::Array{Float64,3}
 
+    particle_covariances::Array{Float64, 3}
+
     current_observation::Vector{Float64}
     historic_observations::Array{Float64,2}
 
-    is_log_weights::Bool = false
     current_weights::Vector{Float64}
     historic_weights::Array{Float64,2}
 
@@ -160,10 +161,11 @@ end
     current_particles::Array{Float64,2}
     historic_particles::Array{Float64,3}
 
+    particle_covariances::Array{Float64, 3}
+
     current_observation::Vector{Float64}
     historic_observations::Array{Float64,2}
 
-    is_log_weights::Bool = false
     current_weights::Vector{Float64}
     historic_weights::Array{Float64,2}
 
@@ -189,10 +191,11 @@ end
     current_particles::Array{Float64,2}
     historic_particles::Array{Float64,3}
 
+    particle_covariances::Array{Float64, 3}
+
     current_observation::Vector{Float64}
     historic_observations::Array{Float64,2}
 
-    is_log_weights::Bool = false
     current_weights::Vector{Float64}
     historic_weights::Array{Float64,2}
 
@@ -219,10 +222,11 @@ end
     current_particles::Array{Float64,2}
     historic_particles::Array{Float64,3}
 
+    particle_covariances::Array{Float64, 3}
+
     current_observation::Vector{Float64}
     historic_observations::Array{Float64,2}
 
-    is_log_weights::Bool = false
     current_weights::Vector{Float64}
     historic_weights::Array{Float64,2}
 
@@ -242,7 +246,6 @@ function make_pf_wT(
     SSM::state_space_model_add_gaussian,
     T,
     filter_specific_parameters;
-    is_log_weights::Bool = false,
     num_particles::Int64,
 )
     @unpack Q, R = SSM
@@ -251,6 +254,11 @@ function make_pf_wT(
 
     current_particles = Array{Float64,2}(undef, state_dim, num_particles)
     historic_particles = Array{Float64,3}(undef, state_dim, num_particles, T+1)
+
+    particle_covariances = Array{Float64,3}(undef, state_dim, state_dim, num_particles)
+    for i in 1:num_particles
+        particle_covariances[:, :, i] .= SSM.P
+    end
 
     current_weights = Array{Float64,1}(undef, num_particles)
     historic_weights = Array{Float64,2}(undef, num_particles, T+1)
@@ -271,13 +279,13 @@ function make_pf_wT(
         historic_weights = historic_weights,
         current_observation = current_observation,
         historic_observations = historic_observations,
-        is_log_weights = is_log_weights,
         filter_specific_parameters = filter_specific_parameters,
         num_particles = num_particles,
         ancestry = ancestry,
         current_mean = SSM.p0,
         current_cov = SSM.P,
         likelihood = likelihood,
+        particle_covariances = particle_covariances,
     )
 end
 
@@ -285,41 +293,45 @@ function make_pf_wT(
     SSM::state_space_model_gen_gaussian,
     T,
     filter_specific_parameters;
-    is_log_weights::Bool = false,
     num_particles::Int64,
-)
-    @unpack Q, R = SSM
-    state_dim = size(Q, 1)
-    obs_dim = size(R, 1)
-
-    current_particles = Array{Float64,2}(undef, state_dim, num_particles)
-    historic_particles = Array{Float64,3}(undef, state_dim, num_particles, T+1)
-
-    current_weights = Array{Float64,1}(undef, num_particles)
-    historic_weights = Array{Float64,2}(undef, num_particles, T+1)
-
-    current_observation = Array{Float64,1}(undef, obs_dim)
-    historic_observations = Array{Float64,2}(undef, obs_dim, T)
-
-    ancestry = Array{Int64,2}(undef, num_particles, T+1)
-    likelihood = Vector{Float64}(undef, T)
-
-    return gen_gaussian_ssm_particle_filter_known_T(
-        SSM = SSM,
-        t = 0,
-        T = T,
-        current_particles = current_particles,
-        historic_particles = historic_particles,
-        current_weights = current_weights,
-        historic_weights = historic_weights,
-        current_observation = current_observation,
-        historic_observations = historic_observations,
-        is_log_weights = is_log_weights,
-        filter_specific_parameters = filter_specific_parameters,
-        num_particles = num_particles,
-        ancestry = ancestry,
-        current_mean = SSM.p0,
-        current_cov = SSM.P,
-        likelihood = likelihood,
     )
-end
+        @unpack Q, R = SSM
+        state_dim = size(Q, 1)
+        obs_dim = size(R, 1)
+
+        current_particles = Array{Float64,2}(undef, state_dim, num_particles)
+        historic_particles = Array{Float64,3}(undef, state_dim, num_particles, T+1)
+
+        particle_covariances = Array{Float64,3}(undef, state_dim, state_dim, num_particles)
+        for i in 1:num_particles
+            particle_covariances[:, :, i] .= SSM.P
+        end
+
+        current_weights = Array{Float64,1}(undef, num_particles)
+        historic_weights = Array{Float64,2}(undef, num_particles, T+1)
+
+        current_observation = Array{Float64,1}(undef, obs_dim)
+        historic_observations = Array{Float64,2}(undef, obs_dim, T)
+
+        ancestry = Array{Int64,2}(undef, num_particles, T+1)
+        likelihood = Vector{Float64}(undef, T)
+
+        return gen_gaussian_ssm_particle_filter_known_T(
+            SSM = SSM,
+            t = 0,
+            T = T,
+            current_particles = current_particles,
+            historic_particles = historic_particles,
+            current_weights = current_weights,
+            historic_weights = historic_weights,
+            current_observation = current_observation,
+            historic_observations = historic_observations,
+            filter_specific_parameters = filter_specific_parameters,
+            num_particles = num_particles,
+            ancestry = ancestry,
+            current_mean = SSM.p0,
+            current_cov = SSM.P,
+            likelihood = likelihood,
+            particle_covariances = particle_covariances,
+        )
+    end
