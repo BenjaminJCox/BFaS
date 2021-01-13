@@ -13,7 +13,7 @@ using .containers
 # gr()
 
 
-Random.seed!(012)
+Random.seed!(02)
 # gr()
 plotlyjs()
 function container_test()
@@ -54,8 +54,8 @@ function container_test()
     kl_m = zeros(2, T)
     kl_V = zeros(2, T)
     for t = 1:T
-        containers.SIR_ExKF_kT_step!(filter, t, [y[t]])
-        # containers.BPF_kT_step!(filter, t, [y[t]])
+        # containers.SIR_ExKF_kT_step!(filter, t, [y[t]])
+        containers.BPF_kT_step!(filter, t, [y[t]])
         # containers.APF_kT_step!(filter, t, [y[t]])
         kl_m[:, t] = filter.current_mean
         kl_V[1, t] = filter.current_cov[1, 1]
@@ -118,9 +118,9 @@ function mul_container_test()
     kl_m = zeros(T)
     kl_V = zeros(T)
     for t = 1:T
-        containers.SIR_ExKF_kT_step!(filter, t, [y[t]])
+        # containers.SIR_ExKF_kT_step!(filter, t, [y[t]])
         # containers.BPF_kT_step!(filter, t, [y[t]])
-        # containers.APF_kT_step!(filter, t, [y[t]])
+        containers.APF_kT_step!(filter, t, [y[t]])
         kl_m[t] = filter.current_mean[1]
         kl_V[t] = filter.current_cov[1, 1]
     end
@@ -145,7 +145,7 @@ function l63_test()
     y = zeros(2, T)
 
     params = Dict{Symbol,Any}()
-    H = [1.0 0.0 1.0; 0.0 1.0 0.0]
+    H = [1.0 0.0 0.0; 0.0 1.0 0.0]
 
     step(x, p) = l63_step(x)
     obs(x, p) = H * x
@@ -172,8 +172,8 @@ function l63_test()
     kl_V = zeros(3, T)
     for t = 1:T
         # containers.SIR_ExKF_kT_step!(filter, t, y[:, t])
-        containers.BPF_kT_step!(filter, t, y[:, t])
-        # containers.APF_kT_step!(filter, t, y[:, t])
+        # containers.BPF_kT_step!(filter, t, y[:, t])
+        containers.APF_kT_step!(filter, t, y[:, t])
         kl_m[:, t] = filter.current_mean
         kl_V[1, t] = filter.current_cov[1, 1]
         kl_V[2, t] = filter.current_cov[2, 2]
@@ -183,34 +183,23 @@ function l63_test()
     return @dict filter x y kl_m kl_V T
 end
 
-# function lorenz!(du, u, p, t)
-#     du[1] = 10.0 * (u[2] - u[1])
-#     du[2] = u[1] * (28.0 - u[3]) - u[2]
-#     du[3] = u[1] * u[2] - (8 / 3) * u[3]
-# end
-# tspan = (0.0, 0.05)
-# prob = ODEProblem(lorenz!, x, tspan)
-# sol = solve(prob)
-# plot(sol, vars = (1,2,3))
 
-
-op = container_test()
-x = op[:x]
-y = op[:y]
-km = op[:kl_m]
-kv = op[:kl_V]
-T = op[:T]
-filter = op[:filter]
-
-umf = rmse(x, km)
-@info("Filter RMSE:", umf)
-a_ef = containers.approx_energy_function(filter)
-@info("Approximate Energy: ", a_ef[end])
-
-plot(1:T, x[1, :], size = (750, 500), label = "Truth", legend=:outertopright)
-plot!(1:T, y, label = "Observations", st = :scatter)
-plot!(1:T, km[1, :], label = "Filter Mean", ribbon = sqrt.(kv[1,:]))
-
+# op = container_test()
+# x = op[:x]
+# y = op[:y]
+# km = op[:kl_m]
+# kv = op[:kl_V]
+# T = op[:T]
+# filter = op[:filter]
+#
+# umf = rmse(x, km)
+# @info("Filter RMSE:", umf)
+# a_ef = containers.approx_energy_function(filter)
+# @info("Approximate Energy: ", a_ef[end])
+#
+# plot(1:T, x[1, :], size = (750, 500), label = "Truth", legend=:outertopright)
+# plot!(1:T, y, label = "Observations", st = :scatter)
+# plot!(1:T, km[1, :], label = "Filter Mean", ribbon = sqrt.(kv[1,:]))
 
 
 # mul = mul_container_test()
@@ -232,27 +221,26 @@ plot!(1:T, km[1, :], label = "Filter Mean", ribbon = sqrt.(kv[1,:]))
 # plot(p1, p2, layout = (2, 1), size = (1250, 500), link = :x, legend = false)
 
 
+lorenz = l63_test()
+x = lorenz[:x]
+y = lorenz[:y]
+# plot(x[1,:], x[2,:], x[3,:])
+# plot!(y[1,:], y[2,:], y[3,:])
+km = lorenz[:kl_m]
+kv = lorenz[:kl_V]
+T = lorenz[:T]
+filter = lorenz[:filter]
 
-# lorenz = l63_test()
-# x = lorenz[:x]
-# y = lorenz[:y]
-# # plot(x[1,:], x[2,:], x[3,:])
-# # plot!(y[1,:], y[2,:], y[3,:])
-# km = lorenz[:kl_m]
-# kv = lorenz[:kl_V]
-# T = lorenz[:T]
-# filter = lorenz[:filter]
-#
-# umf = rmse(x, km)
-# @info("Filter RMSE:", umf)
-# a_ef = containers.approx_energy_function(filter)
-# @info("Approximate Energy: ", a_ef[end])
-#
-# plts = Array{Any}(nothing, 3)
-# for k = 1:3
-#     kthsubplot = plot(1:T, x[k,:], label = "Truth")
-#     plot!(1:T, km[k,:], label = "Filter Mean", ribbon = sqrt.(kv[k,:]))
-#     plts[k] = kthsubplot
-# end
-# plot(plts..., layout = (3,1), size = (1000, 1000), legend = false)
+umf = rmse(x, km)
+@info("Filter RMSE:", umf)
+a_ef = containers.approx_energy_function(filter)
+@info("Approximate Energy: ", a_ef[end])
+
+plts = Array{Any}(nothing, 3)
+for k = 1:3
+    kthsubplot = plot(1:T, x[k,:], label = "Truth")
+    plot!(1:T, km[k,:], label = "Filter Mean", ribbon = sqrt.(kv[k,:]))
+    plts[k] = kthsubplot
+end
+plot(plts..., layout = (3,1), size = (1000, 1000), legend = false)
 # # plot!(1:T, y[1,:], label = "Observations", st = :scatter)

@@ -43,7 +43,11 @@ function cov_from_addmul(add, mul, x, l, C, p)
 
     h_xk = mul(x, ov, p)
     v_r = add(x, ov, p) .- add(x, zv, p)
-    sta_cov = h_xk * C * transpose(v_r) + v_r * C * transpose(h_xk) + 2.0 .* v_r * C * transpose(v_r) + 2.0 .* h_xk * C * transpose(h_xk)
+    sta_cov =
+        h_xk * C * transpose(v_r) +
+        v_r * C * transpose(h_xk) +
+        2.0 .* v_r * C * transpose(v_r) +
+        2.0 .* h_xk * C * transpose(h_xk)
     return sta_cov
 end
 
@@ -112,8 +116,8 @@ function BPF_kT_step!(
         wsample(1:filter.num_particles, norm_weights, filter.num_particles, replace = true)
     filter.ancestry[:, t+1] = selected_indices
     filter.current_mean = sum(filter.current_particles .* norm_weights', dims = 2)[:, 1]
-    filter.current_cov = cov(filter.current_particles, dims = 2)
     filter.current_particles = filter.current_particles[:, selected_indices]
+    filter.current_cov = cov(filter.current_particles, dims = 2)
     filter.historic_particles[:, :, t+1] = filter.current_particles
     filter.historic_weights[:, t+1] = filter.current_weights
     filter.likelihood[t] = sum(filter.current_weights) ./ filter.num_particles
@@ -133,17 +137,26 @@ function BPF_kT_step!(
     obs_ov = ones(length(observation))
 
     for i = 1:filter.num_particles
-        xp =
-            filter.SSM.f(filter.current_particles[:, i], rand(pert_dist), filter.SSM.ssm_parameters)
+        xp = filter.SSM.f(
+            filter.current_particles[:, i],
+            rand(pert_dist),
+            filter.SSM.ssm_parameters,
+        )
 
         filter.current_particles[:, i] .= xp
 
-        # @views h_xk = filter.SSM.mul_g(filter.current_particles[:, i], obs_ov, filter.SSM.ssm_parameters)
-        # @views v_r = filter.SSM.add_g(filter.current_particles[:, i], obs_ov, filter.SSM.ssm_parameters) .- filter.SSM.add_g(filter.current_particles[:, i], obs_zv, filter.SSM.ssm_parameters)
-        # obs_cov = h_xk * filter.SSM.R * transpose(v_r) + v_r * filter.SSM.R * transpose(h_xk) + 2.0 .* v_r * filter.SSM.R * transpose(v_r) + 2.0 .* h_xk * filter.SSM.R * transpose(h_xk)
-        # obs_cov = Matrix(Hermitian(obs_cov))
-        obs_cov = cov_from_addmul(filter.SSM.add_g, filter.SSM.mul_g, xp, length(observation), filter.SSM.R, filter.SSM.ssm_parameters)
-        filter.current_weights[i] = pdf(MvNormal(filter.SSM.g(xp, obs_zv, filter.SSM.ssm_parameters), obs_cov), observation)
+        obs_cov = cov_from_addmul(
+            filter.SSM.add_g,
+            filter.SSM.mul_g,
+            xp,
+            length(observation),
+            filter.SSM.R,
+            filter.SSM.ssm_parameters,
+        )
+        filter.current_weights[i] = pdf(
+            MvNormal(filter.SSM.g(xp, obs_zv, filter.SSM.ssm_parameters), obs_cov),
+            observation,
+        )
     end
 
 
@@ -152,8 +165,8 @@ function BPF_kT_step!(
         wsample(1:filter.num_particles, norm_weights, filter.num_particles, replace = true)
     filter.ancestry[:, t+1] = selected_indices
     filter.current_mean = sum(filter.current_particles .* norm_weights', dims = 2)[:, 1]
-    filter.current_cov = cov(filter.current_particles, dims = 2)
     filter.current_particles = filter.current_particles[:, selected_indices]
+    filter.current_cov = cov(filter.current_particles, dims = 2)
     filter.historic_particles[:, :, t+1] = filter.current_particles
     filter.historic_weights[:, t+1] = filter.current_weights
     filter.likelihood[t] = sum(filter.current_weights) ./ filter.num_particles
@@ -168,9 +181,6 @@ function SIR_ExKF_kT_step!(
     filter.current_observation = observation
     filter.historic_observations[:, t] = observation
     filter.t = t
-
-    # _xdim = length(filter.current_particles[:, 1])
-    # _ydim = length(observation)
 
     f_map(x) = filter.SSM.f(x, filter.SSM.ssm_parameters)
     g_map(x) = filter.SSM.g(x, filter.SSM.ssm_parameters)
@@ -212,8 +222,8 @@ function SIR_ExKF_kT_step!(
         wsample(1:filter.num_particles, norm_weights, filter.num_particles, replace = true)
     filter.ancestry[:, t+1] = selected_indices
     filter.current_mean = sum(filter.current_particles .* norm_weights', dims = 2)[:, 1]
-    filter.current_cov = cov(filter.current_particles[:, selected_indices], dims = 2)
     filter.current_particles = filter.current_particles[:, selected_indices]
+    filter.current_cov = cov(filter.current_particles[:, selected_indices], dims = 2)
     filter.particle_covariances = filter.particle_covariances[:, :, selected_indices]
     filter.historic_particles[:, :, t+1] = filter.current_particles
     filter.historic_weights[:, t+1] = filter.current_weights
@@ -230,9 +240,6 @@ function SIR_ExKF_kT_step!(
     filter.historic_observations[:, t] = observation
     filter.t = t
 
-    # _xdim = length(filter.current_particles[:, 1])
-    # _ydim = length(observation)
-
     sta_zv = zeros(length(filter.current_mean))
     obs_zv = zeros(length(observation))
     sta_ov = ones(length(filter.current_mean))
@@ -242,7 +249,6 @@ function SIR_ExKF_kT_step!(
     g_map(x, h) = filter.SSM.g(x, h, filter.SSM.ssm_parameters)
 
     @simd for i = 1:filter.num_particles
-        # x_m = filter.current_particles[:, i]
         predicted_mean, predicted_cov = exkf_predict_nonadd(
             filter.current_particles[:, i],
             filter.particle_covariances[:, :, i],
@@ -260,9 +266,23 @@ function SIR_ExKF_kT_step!(
         filter.particle_covariances[:, :, i] .= filtered_cov
         prop_dist = MvNormal(filtered_mean, filtered_cov)
 
-        obs_cov = cov_from_addmul(filter.SSM.add_g, filter.SSM.mul_g, filter.current_particles[:, i], length(observation), filter.SSM.R, filter.SSM.ssm_parameters)
+        obs_cov = cov_from_addmul(
+            filter.SSM.add_g,
+            filter.SSM.mul_g,
+            filter.current_particles[:, i],
+            length(observation),
+            filter.SSM.R,
+            filter.SSM.ssm_parameters,
+        )
 
-        sta_cov = cov_from_addmul(filter.SSM.add_f, filter.SSM.mul_f, filter.current_particles[:, i], length(filter.current_mean), filter.SSM.Q, filter.SSM.ssm_parameters)
+        sta_cov = cov_from_addmul(
+            filter.SSM.add_f,
+            filter.SSM.mul_f,
+            filter.current_particles[:, i],
+            length(filter.current_mean),
+            filter.SSM.Q,
+            filter.SSM.ssm_parameters,
+        )
 
         # imp_y = g_map(xp)
         model_dist = MvNormal(f_map(filter.current_particles[:, i], sta_zv), sta_cov)
@@ -274,7 +294,8 @@ function SIR_ExKF_kT_step!(
             logpdf(prop_dist, filter.current_particles[:, i])
     end
 
-    filter.current_weights .= exp.(filter.current_weights .- maximum(filter.current_weights))
+    filter.current_weights .=
+        exp.(filter.current_weights .- maximum(filter.current_weights))
 
 
     norm_weights = filter.current_weights / sum(filter.current_weights)
@@ -282,8 +303,8 @@ function SIR_ExKF_kT_step!(
         wsample(1:filter.num_particles, norm_weights, filter.num_particles, replace = true)
     filter.ancestry[:, t+1] = selected_indices
     filter.current_mean = sum(filter.current_particles .* norm_weights', dims = 2)[:, 1]
-    filter.current_cov = cov(filter.current_particles[:, selected_indices], dims = 2)
     filter.current_particles = filter.current_particles[:, selected_indices]
+    filter.current_cov = cov(filter.current_particles[:, selected_indices], dims = 2)
     filter.particle_covariances = filter.particle_covariances[:, :, selected_indices]
     filter.historic_particles[:, :, t+1] = filter.current_particles
     filter.historic_weights[:, t+1] = filter.current_weights
@@ -360,8 +381,8 @@ function SIR_UKF_kT_step!(
         wsample(1:filter.num_particles, norm_weights, filter.num_particles, replace = true)
     filter.ancestry[:, t+1] = selected_indices
     filter.current_mean = vec(sum(norm_weights .* proposal_samples, dims = 1))
-    filter.current_cov = cov(proposal_samples[selected_indices, :], dims = 1)
     filter.current_particles = proposal_samples[selected_indices, :]'
+    filter.current_cov = cov(proposal_samples[selected_indices, :], dims = 1)
     filter.historic_particles[:, :, t+1] = filter.current_particles
     filter.historic_weights[:, t+1] = filter.current_weights
     filter.likelihood[t] = sum(filter.current_weights) ./ filter.num_particles
@@ -454,11 +475,17 @@ function APF_kT_step!(
 
     pws = zeros(filter.num_particles)
     for i = 1:filter.num_particles
-        obs_cov = cov_from_addmul(filter.SSM.add_g, filter.SSM.mul_g, x_pred[:, i], length(observation), filter.SSM.R, filter.SSM.ssm_parameters)
+        obs_cov = cov_from_addmul(
+            filter.SSM.add_g,
+            filter.SSM.mul_g,
+            x_pred[:, i],
+            length(observation),
+            filter.SSM.R,
+            filter.SSM.ssm_parameters,
+        )
         pws[i] = pdf(MvNormal(x_pred_obs[:, i], obs_cov), observation)
         filter.current_weights[i] = pws[i] .* filter.historic_weights[i, t]
     end
-    # preweights = filter.current_weights
 
     filter.current_weights ./= sum(filter.current_weights)
     selected_indices =
@@ -466,7 +493,8 @@ function APF_kT_step!(
     selected_particles = filter.current_particles[:, selected_indices]
 
     for i = 1:filter.num_particles
-        filter.current_particles[:, i] .= f_map(selected_particles[:, i], rand(sys_noise_dist))
+        filter.current_particles[:, i] .=
+            f_map(selected_particles[:, i], rand(sys_noise_dist))
     end
 
 
@@ -475,12 +503,27 @@ function APF_kT_step!(
         x_d_fc = f_map(selected_particles[:, i], sta_zv)
         x_den = g_map(x_d_fc, obs_zv)
 
-        num_cov = cov_from_addmul(filter.SSM.add_g, filter.SSM.mul_g, filter.current_particles[:, i], length(observation), filter.SSM.R, filter.SSM.ssm_parameters)
+        num_cov = cov_from_addmul(
+            filter.SSM.add_g,
+            filter.SSM.mul_g,
+            filter.current_particles[:, i],
+            length(observation),
+            filter.SSM.R,
+            filter.SSM.ssm_parameters,
+        )
 
-        den_cov = cov_from_addmul(filter.SSM.add_g, filter.SSM.mul_g, x_d_fc, length(observation), filter.SSM.R, filter.SSM.ssm_parameters)
+        den_cov = cov_from_addmul(
+            filter.SSM.add_g,
+            filter.SSM.mul_g,
+            x_d_fc,
+            length(observation),
+            filter.SSM.R,
+            filter.SSM.ssm_parameters,
+        )
 
         filter.current_weights[i] =
-            logpdf(MvNormal(x_num, num_cov), observation) - logpdf(MvNormal(x_den, den_cov), observation)
+            logpdf(MvNormal(x_num, num_cov), observation) -
+            logpdf(MvNormal(x_den, den_cov), observation)
     end
 
     filter.current_weights .= exp.(filter.current_weights)
