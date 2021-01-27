@@ -39,11 +39,11 @@ function kalman_llh(observations, A, H, m0, P0, Q, R)
     return perform_kalman(observations, A, H, m0, P0, Q, R)[3]
 end
 
-A = [1.0 1.0; 0.0 1.0]
+A = [1.0 1.0; 0.0 0.5]
 H = [1.0 0.0]
 
 P = [0.1 0.0; 0.0 0.1]
-Q = [0.1 0.0; 0.0 1.0]
+Q = [0.1 0.0; 0.0 0.1]
 R = hcat([1.0])
 
 m0 = [0.1, 0.0]
@@ -68,11 +68,27 @@ end
 llh = kalman_llh(Y, A, H, m0, P, Q, R)
 @info(llh)
 
-kalman_abq(Q) = kalman_llh(Y, A, H, m0, P, Q, R)
+kalman_abA(A) = kalman_llh(Y, A, H, m0, P, Q, R)
 
-Q_2 = Q .+ diagm(rand(2))
-kalman_abq(Q)
-kalman_abq(Q_2)
+A_2 = A .+ rand(2,2)
+kalman_abA(A)
+kalman_abA(A_2)
 
-kalgrad = ForwardDiff.gradient(kalman_abq, Q)
-@info(kalgrad)
+lr = 1e-3
+for i = 1:1000
+    kalgrad = ForwardDiff.gradient(kalman_abA, A_2)
+    A_2 .+= lr * kalgrad
+end
+
+kalman_abq(A_2)
+@info(A_2)
+
+A_res = perform_kalman(Y, A, H, m0, P, Q, R)[1]
+A2_res = perform_kalman(Y, A_2, H, m0, P, Q, R)[1]
+
+p1 = plot(1:T, X[1,:])
+plot!(1:T, A_res[1,:])
+p2 = plot(1:T, X[1,:])
+plot!(1:T, A2_res[1,:])
+
+plot(p1, p2, layout = (2,1), size = (1000, 1000), legend = false)
