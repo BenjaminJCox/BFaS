@@ -118,9 +118,9 @@ function mul_container_test()
     kl_m = zeros(T)
     kl_V = zeros(T)
     for t = 1:T
-        # containers.SIR_ExKF_kT_step!(filter, t, [y[t]])
+        containers.SIR_ExKF_kT_step!(filter, t, [y[t]])
         # containers.BPF_kT_step!(filter, t, [y[t]])
-        containers.APF_kT_step!(filter, t, [y[t]])
+        # containers.APF_kT_step!(filter, t, [y[t]])
         kl_m[t] = filter.current_mean[1]
         kl_V[t] = filter.current_cov[1, 1]
     end
@@ -172,8 +172,8 @@ function l63_test()
     kl_V = zeros(3, T)
     for t = 1:T
         # containers.SIR_ExKF_kT_step!(filter, t, y[:, t])
-        # containers.BPF_kT_step!(filter, t, y[:, t])
-        containers.APF_kT_step!(filter, t, y[:, t])
+        containers.BPF_kT_step!(filter, t, y[:, t])
+        # containers.APF_kT_step!(filter, t, y[:, t])
         kl_m[:, t] = filter.current_mean
         kl_V[1, t] = filter.current_cov[1, 1]
         kl_V[2, t] = filter.current_cov[2, 2]
@@ -184,22 +184,22 @@ function l63_test()
 end
 
 
-# op = container_test()
-# x = op[:x]
-# y = op[:y]
-# km = op[:kl_m]
-# kv = op[:kl_V]
-# T = op[:T]
-# filter = op[:filter]
-#
-# umf = rmse(x, km)
-# @info("Filter RMSE:", umf)
-# a_ef = containers.approx_energy_function(filter)
-# @info("Approximate Energy: ", a_ef[end])
-#
-# plot(1:T, x[1, :], size = (750, 500), label = "Truth", legend=:outertopright)
-# plot!(1:T, y, label = "Observations", st = :scatter)
-# plot!(1:T, km[1, :], label = "Filter Mean", ribbon = sqrt.(kv[1,:]))
+op = container_test()
+x = op[:x]
+y = op[:y]
+km = op[:kl_m]
+kv = op[:kl_V]
+T = op[:T]
+filter = op[:filter]
+
+umf = rmse(x, km)
+@info("Filter RMSE:", umf)
+a_ef = containers.approx_energy_function(filter)
+@info("Approximate Energy: ", a_ef[end])
+@info("Observation Likelihood: ", filter.likelihood)
+plot(1:T, x[1, :], size = (750, 500), label = "Truth", legend=:outertopright)
+plot!(1:T, y, label = "Observations", st = :scatter)
+plot!(1:T, km[1, :], label = "Filter Mean", ribbon = sqrt.(kv[1,:]))
 
 
 # mul = mul_container_test()
@@ -219,28 +219,69 @@ end
 # plot!(1:T, km, label = "Filter Mean", ribbon = sqrt.(kv))
 # p2 = plot(1:T, y, label = "Observations")
 # plot(p1, p2, layout = (2, 1), size = (1250, 500), link = :x, legend = false)
+# lorenz = l63_test()
+# x = lorenz[:x]
+# y = lorenz[:y]
+# # plot(x[1,:], x[2,:], x[3,:])
+# # plot!(y[1,:], y[2,:], y[3,:])
+# km = lorenz[:kl_m]
+# kv = lorenz[:kl_V]
+# T = lorenz[:T]
+# filter = lorenz[:filter]
+#
+# umf = rmse(x, km)
+# @info("Filter RMSE:", umf)
+# a_ef = containers.approx_energy_function(filter)
+# @info("Approximate Energy: ", a_ef[end])
+#
+# plts = Array{Any}(nothing, 3)
+# for k = 1:3
+#     kthsubplot = plot(1:T, x[k,:], label = "Truth")
+#     plot!(1:T, km[k,:], label = "Filter Mean", ribbon = sqrt.(kv[k,:]))
+#     plts[k] = kthsubplot
+# end
+# plot(plts..., layout = (3,1), size = (1000, 1000), legend = false)
+# # # plot!(1:T, y[1,:], label = "Observations", st = :scatter)
 
 
-lorenz = l63_test()
-x = lorenz[:x]
-y = lorenz[:y]
-# plot(x[1,:], x[2,:], x[3,:])
-# plot!(y[1,:], y[2,:], y[3,:])
-km = lorenz[:kl_m]
-kv = lorenz[:kl_V]
-T = lorenz[:T]
-filter = lorenz[:filter]
-
-umf = rmse(x, km)
-@info("Filter RMSE:", umf)
-a_ef = containers.approx_energy_function(filter)
-@info("Approximate Energy: ", a_ef[end])
-
-plts = Array{Any}(nothing, 3)
-for k = 1:3
-    kthsubplot = plot(1:T, x[k,:], label = "Truth")
-    plot!(1:T, km[k,:], label = "Filter Mean", ribbon = sqrt.(kv[k,:]))
-    plts[k] = kthsubplot
-end
-plot(plts..., layout = (3,1), size = (1000, 1000), legend = false)
-# # plot!(1:T, y[1,:], label = "Observations", st = :scatter)
+# function Q_noise_dist(θ)
+#     P = θ[:P]
+#     Q = θ[:Q]
+#     R = θ[:R]
+#     σ = 0.02
+#     pert_dist = Normal(0,σ)
+#     Q = Matrix(Q)
+#     Q[1,1] += rand(pert_dist)
+#     Q[2,2] += rand(pert_dist)
+#     Q = Hermitian(abs.(Q))
+#     return Dict(:P => P, :Q => Q, :R => R)
+# end
+#
+# function Q_noise_prior_llh(θ)
+#     Q = θ[:Q]
+#     penalty = norm(Q, 1)
+#     λ = 0.0
+#     # return -λ * penalty
+#     return 0.0
+# end
+#
+# function Q_noise_step_llh(θ_1, θ_2)
+#     return 0.0
+# end
+#
+# function pmmh_helper(pmmhres::Vector{Dict{Symbol,Any}}, voi::Symbol; discard = 0.5)
+#     voisize = size(pmmhres[1][voi])
+#     numsamps = length(pmmhres)
+#     discarded::Integer = floor(Int, discard * numsamps)
+#     samparr = zeros(voisize[1], voisize[2], numsamps - discarded)
+#     for i = (discarded+1):numsamps
+#         samparr[:,:,i-discarded] .= pmmhres[i][voi]
+#     end
+#     return samparr
+# end
+#
+# filter.SSM.Q = Hermitian([0.1 0.0; 0.0 1.0])
+#
+# pmmh_res_Q = containers.perform_PMMH_noises(filter, Q_noise_dist, Q_noise_prior_llh, Q_noise_step_llh, 10000)
+# Q_samples = pmmh_helper(pmmh_res_Q, :Q, discard = 0.75)
+# Q_mean = mean(Q_samples, dims = 3)[:,:,1]

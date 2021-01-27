@@ -223,7 +223,7 @@ function SIR_ExKF_kT_step!(
     filter.ancestry[:, t+1] = selected_indices
     filter.current_mean = sum(filter.current_particles .* norm_weights', dims = 2)[:, 1]
     filter.current_particles = filter.current_particles[:, selected_indices]
-    filter.current_cov = cov(filter.current_particles[:, selected_indices], dims = 2)
+    filter.current_cov = cov(filter.current_particles, dims = 2)
     filter.particle_covariances = filter.particle_covariances[:, :, selected_indices]
     filter.historic_particles[:, :, t+1] = filter.current_particles
     filter.historic_weights[:, t+1] = filter.current_weights
@@ -304,7 +304,7 @@ function SIR_ExKF_kT_step!(
     filter.ancestry[:, t+1] = selected_indices
     filter.current_mean = sum(filter.current_particles .* norm_weights', dims = 2)[:, 1]
     filter.current_particles = filter.current_particles[:, selected_indices]
-    filter.current_cov = cov(filter.current_particles[:, selected_indices], dims = 2)
+    filter.current_cov = cov(filter.current_particles, dims = 2)
     filter.particle_covariances = filter.particle_covariances[:, :, selected_indices]
     filter.historic_particles[:, :, t+1] = filter.current_particles
     filter.historic_weights[:, t+1] = filter.current_weights
