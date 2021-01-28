@@ -19,8 +19,9 @@ plotlyjs()
 function container_test()
     function psi(x, p)
         nx = copy(x)
+        asmp = p[:a]
         nx[1] = x[1] + x[2]
-        nx[2] = -cbrt(abs((x[1] - 10))) * sign(x[1] - 10) / (x[1] + 2)
+        nx[2] = -cbrt(abs((x[1] - asmp))) * sign(x[1] - asmp) / (x[1] + 2)
         return nx
     end
     H = [1.0 0.0]
@@ -42,12 +43,12 @@ function container_test()
 
     x[:, 1] = m0
     y[1] = x[1, 1] .+ rand(obs_rand)
+    params = Dict{Symbol,Any}(:a => 10.0)
 
     for k = 2:T
-        x[:, k] = psi(x[:, k-1], nothing) + rand(process_rand)
+        x[:, k] = psi(x[:, k-1], params) + rand(process_rand)
         y[k] = (H*x[:, k])[1] .+ rand(obs_rand)
     end
-    params = Dict{Symbol,Any}()
     ao_SSM = containers.make_add_gaussian_ssm(psi, Hf, Q, R, m0, P, params, 2, 1)
 
     filter = containers.init_PF_kT(ao_SSM, T, num_particles = 1000)
@@ -119,8 +120,9 @@ function mul_container_test()
     kl_m = zeros(T)
     kl_V = zeros(T)
     for t = 1:T
-        containers.SIR_ExKF_kT_step!(filter, t, [y[t]])
-        # containers.BPF_kT_step!(filter, t, [y[t]])
+        # containers.SIR_ExKF_kT_step!(filter, t, [y[t]])
+        containers.BPF_kT_step!(filter, t, [y[t]])
+        # containers.QBPF_kT_step!(filter, t, [y[t]])
         # containers.APF_kT_step!(filter, t, [y[t]])
         kl_m[t] = filter.current_mean[1]
         kl_V[t] = filter.current_cov[1, 1]
@@ -174,6 +176,7 @@ function l63_test()
     for t = 1:T
         # containers.SIR_ExKF_kT_step!(filter, t, y[:, t])
         containers.BPF_kT_step!(filter, t, y[:, t])
+        # containers.QBPF_kT_step!(filter, t, y[:, t])
         # containers.APF_kT_step!(filter, t, y[:, t])
         kl_m[:, t] = filter.current_mean
         kl_V[1, t] = filter.current_cov[1, 1]
@@ -220,6 +223,8 @@ plot!(1:T, km[1, :], label = "Filter Mean", ribbon = sqrt.(kv[1,:]))
 # plot!(1:T, km, label = "Filter Mean", ribbon = sqrt.(kv))
 # p2 = plot(1:T, y, label = "Observations")
 # plot(p1, p2, layout = (2, 1), size = (1250, 500), link = :x, legend = false)
+
+#
 # lorenz = l63_test()
 # x = lorenz[:x]
 # y = lorenz[:y]
@@ -242,33 +247,53 @@ plot!(1:T, km[1, :], label = "Filter Mean", ribbon = sqrt.(kv[1,:]))
 #     plts[k] = kthsubplot
 # end
 # plot(plts..., layout = (3,1), size = (1000, 1000), legend = false)
-# # plot!(1:T, y[1,:], label = "Observations", st = :scatter)
+# plot!(1:T, y[1,:], label = "Observations", st = :scatter)
 
 
-# function Q_noise_dist(θ)
-#     P = θ[:P]
-#     Q = θ[:Q]
-#     R = θ[:R]
-#     σ = 0.02
-#     pert_dist = Normal(0,σ)
-#     Q = Matrix(Q)
-#     Q[1,1] += rand(pert_dist)
-#     Q[2,2] += rand(pert_dist)
-#     Q = Hermitian(abs.(Q))
-#     return Dict(:P => P, :Q => Q, :R => R)
-# end
-#
-# function Q_noise_prior_llh(θ)
-#     Q = θ[:Q]
-#     penalty = norm(Q, 1)
-#     λ = 0.05
-#     return -λ * penalty
-#     # return 0.0
-# end
-#
-# function Q_noise_step_llh(θ_1, θ_2)
-#     return 0.0
-# end
+function Q_noise_dist(θ)
+    P = θ[:P]
+    Q = θ[:Q]
+    R = θ[:R]
+    σ = 0.02
+    pert_dist = Normal(0,σ)
+    Q = Matrix(Q)
+    Q[1,1] += rand(pert_dist)
+    Q[2,2] += rand(pert_dist)
+    Q = Hermitian(abs.(Q))
+    return Dict(:P => P, :Q => Q, :R => R)
+end
+
+function Q_noise_prior_llh(θ)
+    Q = θ[:Q]
+    penalty = norm(Q, 1)
+    λ = 0.05
+    return -λ * penalty
+    # return 0.0
+end
+
+function Q_noise_step_llh(θ_1, θ_2)
+    return 0.0
+end
+
+function param_dist(θ)
+    a = θ[:a]
+    σ = 1
+    pert_dist = Normal(0,σ)
+    a += rand(pert_dist)
+    return Dict{Symbol,Any}(:a => a)
+end
+
+function param_prior_llh(θ)
+    a = θ[:a]
+    penalty = norm(a, 1)
+    λ = 0.05
+    return -λ * penalty
+    # return 0.0
+end
+
+function param_step_llh(θ_1, θ_2)
+    return 0.0
+end
 #
 # function pmmh_helper(pmmhres::Vector{Dict{Symbol,Any}}, voi::Symbol; discard = 0.5)
 #     voisize = size(pmmhres[1][voi])
@@ -287,3 +312,7 @@ plot!(1:T, km[1, :], label = "Filter Mean", ribbon = sqrt.(kv[1,:]))
 # Q_samples = pmmh_helper(pmmh_res_Q, :Q, discard = 0.75)
 # Q_mean = mean(Q_samples, dims = 3)[:,:,1]
 # display(Q_mean)
+
+filter.SSM.ssm_parameters[:a] = 3.0
+
+pmmh_res_a = containers.perform_PMMH_params(filter, param_dist, param_prior_llh, param_step_llh, 1000)

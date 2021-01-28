@@ -1,8 +1,8 @@
 using LinearAlgebra
 using QuasiMonteCarlo
 
-function box_muller_mvn(n, dims; sampler=LatinHypercubeSample, mean = zeros(dims), cov = Matrix(I(dims)))
-    dims_rt = dims + 2
+function box_muller_mvn(n, dims; sampler=LatticeRuleSample, mean::AbstractVector = zeros(dims), cov::AbstractMatrix = Matrix(I(dims)))
+    dims_rt = dims + dims % 2
     upr = ones(dims_rt)
     lwr = zeros(dims_rt)
     bmised = zeros(dims_rt, n)

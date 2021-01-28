@@ -16,7 +16,7 @@ function perform_PMMH_noises(
     noise_prior_llh::Function,
     noise_step_llh::Function,
     steps::Integer;
-    filter_function::Function = BPF_kT_step!,
+    filter_function::Function = QBPF_kT_step!,
     num_particles::Integer = 100,
 )
     observations = copy(filter.historic_observations)
@@ -62,7 +62,68 @@ function perform_PMMH_noises(
             θ_llh = θ_new_llh
             obs_llh = obs_new_llh
         end
-        # @info(θ[:Q])
+        @info(θ[:Q])
+        θ_samples[i] = θ
+    end
+    return θ_samples
+end
+
+function perform_PMMH_params(
+    filter::containers.add_gaussian_ssm_particle_filter_known_T,
+    param_dist::Function,
+    param_prior_llh::Function,
+    param_step_llh::Function,
+    steps::Integer;
+    filter_function::Function = QBPF_kT_step!,
+    num_particles::Integer = 100,
+)
+    observations = copy(filter.historic_observations)
+    working_filter = filter
+    working_ssm = filter.SSM
+
+    θ_samples = Vector{Dict{Symbol,Any}}(undef, steps)
+    θ = filter.SSM.ssm_parameters
+    θ_llh = param_prior_llh(θ)
+    obs_llh = sum(log.(filter.likelihood))
+
+    T = filter.T
+    θ_new = copy(θ)
+    θ_new_llh = copy(θ_llh)
+    obs_new_llh = copy(obs_llh)
+
+    f = working_ssm.f
+    g = working_ssm.g
+    p0 = working_ssm.p0
+    P = working_ssm.P
+    Q = working_ssm.Q
+    R = working_ssm.R
+    parameters = working_ssm.ssm_parameters
+    state_dim = size(Q, 1)
+    obs_dim = size(R, 1)
+
+    make_ssm(θ) =
+        make_add_gaussian_ssm(f, g, Q, R, p0, P, θ, state_dim, obs_dim)
+    for i = 1:steps
+        θ_new = param_dist(θ)
+        θ_new_llh = param_prior_llh(θ_new)
+
+        working_ssm = make_ssm(θ_new)
+        working_filter = init_PF_kT(working_ssm, T, num_particles = num_particles)
+        for t = 1:T
+            filter_function(working_filter, t, observations[:, t])
+        end
+        obs_new_llh = sum(log.(working_filter.likelihood))
+
+        mh_ratio =
+            θ_new_llh - θ_llh + obs_new_llh - obs_llh + param_step_llh(θ, θ_new) -
+            param_step_llh(θ_new, θ)
+        lr = log(rand())
+        if lr < mh_ratio
+            θ = θ_new
+            θ_llh = θ_new_llh
+            obs_llh = obs_new_llh
+        end
+        @info(θ[:a])
         θ_samples[i] = θ
     end
     return θ_samples
