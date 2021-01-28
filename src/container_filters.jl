@@ -124,6 +124,41 @@ function BPF_kT_step!(
     return filter
 end
 
+function QBPF_kT_step!(
+    filter::containers.add_gaussian_ssm_particle_filter_known_T,
+    t,
+    observation,
+)
+    filter.current_observation = observation
+    filter.historic_observations[:, t] = observation
+    filter.t = t
+    # pert_dist = MvNormal(Matrix(filter.SSM.Q))
+    pert_samples = box_muller_mvn(filter.num_particles, length(filter.SSM.p0), cov = Matrix(filter.SSM.Q), sampler = SobolSample)
+    opind = shuffle(1:filter.num_particles)
+    pert_samples .= pert_samples[:,opind]
+    for i = 1:filter.num_particles
+        xp =
+            filter.SSM.f(filter.current_particles[:, i], filter.SSM.ssm_parameters) .+
+            pert_samples[:,i]
+        filter.current_particles[:, i] = xp
+        filter.current_weights[i] = pdf(
+            MvNormal(filter.SSM.g(xp, filter.SSM.ssm_parameters), Matrix(filter.SSM.R)),
+            observation,
+        )
+    end
+    norm_weights = filter.current_weights / sum(filter.current_weights)
+    selected_indices =
+        wsample(1:filter.num_particles, norm_weights, filter.num_particles, replace = true)
+    filter.ancestry[:, t+1] = selected_indices
+    filter.current_mean = sum(filter.current_particles .* norm_weights', dims = 2)[:, 1]
+    filter.current_particles = filter.current_particles[:, selected_indices]
+    filter.current_cov = cov(filter.current_particles, dims = 2)
+    filter.historic_particles[:, :, t+1] = filter.current_particles
+    filter.historic_weights[:, t+1] = filter.current_weights
+    filter.likelihood[t] = sum(filter.current_weights) ./ filter.num_particles
+    return filter
+end
+
 function BPF_kT_step!(
     filter::containers.gen_gaussian_ssm_particle_filter_known_T,
     t,
