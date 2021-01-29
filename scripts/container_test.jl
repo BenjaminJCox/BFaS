@@ -56,8 +56,8 @@ function container_test()
     kl_V = zeros(2, T)
     for t = 1:T
         # containers.SIR_ExKF_kT_step!(filter, t, [y[t]])
-        # containers.BPF_kT_step!(filter, t, [y[t]])
-        containers.QBPF_kT_step!(filter, t, [y[t]])
+        containers.BPF_kT_step!(filter, t, [y[t]])
+        # containers.QBPF_kT_step!(filter, t, [y[t]])
         # containers.APF_kT_step!(filter, t, [y[t]])
         kl_m[:, t] = filter.current_mean
         kl_V[1, t] = filter.current_cov[1, 1]
@@ -201,8 +201,14 @@ umf = rmse(x, km)
 a_ef = containers.approx_energy_function(filter)
 @info("Approximate Energy: ", a_ef[end])
 @info("Observation Likelihood: ", filter.likelihood)
+
+bwt = containers.backward_sample(filter)
+# bwr = rmse(x, bwt[:, 2:(T+1)])
+csm = containers.CSMC_sampler_run(filter, bwt)
+@info("BackSim RMSE:", bwr)
 plot(1:T, x[1, :], size = (750, 500), label = "Truth", legend=:outertopright)
 plot!(1:T, y, label = "Observations", st = :scatter)
+# plot!(1:T, bwt[1, 2:(T+1)], label = "Backward Sampled Path")
 plot!(1:T, km[1, :], label = "Filter Mean", ribbon = sqrt.(kv[1,:]))
 
 
