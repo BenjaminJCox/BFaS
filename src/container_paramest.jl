@@ -128,3 +128,79 @@ function perform_PMMH_params(
     end
     return θ_samples
 end
+
+# implicitely assumes static parameters
+function CSMC_sampler_run(filter::containers.add_gaussian_ssm_particle_filter_known_T, fixed_trajectory::AbstractMatrix; num_particles::Integer = 100)
+    T = filter.T
+
+    state_dim = length(filter.SSM.p0)
+    obs_dim = length(filter.current_observation)
+
+    current_particles = Array{Float64,2}(undef, state_dim, num_particles)
+    historic_particles = Array{Float64,3}(undef, state_dim, num_particles, T+1)
+
+    ancestry = Array{Int64,2}(undef, num_particles, T+1)
+    likelihood = Vector{Float64}(undef, T)
+
+    historic_observations = filter.historic_observations
+    current_weights = Vector{Float64}(undef, num_particles)
+
+    prior_dist = MvNormal(filter.SSM.p0, Matrix(filter.SSM.P))
+    pert_dist = MvNormal(Matrix(filter.SSM.Q))
+
+    current_particles .= rand(prior_dist, num_particles)
+    current_particles[:, 1] = fixed_trajectory[:, 1]
+    current_weights .= inv(num_particles)
+
+    historic_particles[:, :, 1] .= current_particles
+    ancestry[:, 1] .= 1:num_particles
+
+    selected_indices = copy(ancestry[:, 1])
+
+    for t = 1:T
+        current_particles[:, 1] = fixed_trajectory[:, t+1]
+        observation = historic_observations[:, t]
+        for i = 2:num_particles
+            xp =
+                filter.SSM.f(current_particles[:, i], filter.SSM.ssm_parameters) .+
+                rand(pert_dist)
+            current_particles[:, i] = xp
+        end
+        for i = 1:num_particles
+            current_weights[i] = pdf(
+                MvNormal(filter.SSM.g(current_particles[:, i], filter.SSM.ssm_parameters), Matrix(filter.SSM.R)),
+                observation,
+            )
+        end
+        # csmc resampling
+        selected_indices = wsample(1:num_particles, current_weights, num_particles)
+        selected_indices[1] = 1
+        ancestry[:, t+1] .= selected_indices
+        current_particles .= current_particles[:, selected_indices]
+        historic_particles[:, :, t+1] = current_particles
+
+        likelihood[t] = sum(current_weights) * inv(num_particles)
+    end
+
+    llh = sum(log.(likelihood))
+    return @dict historic_particles ancestry likelihood llh
+end
+
+function pull_trajectory(filter, trajectory_index::Integer)
+    T = filter.T
+    state_dim = length(filter.SSM.p0)
+    historic_particles = filter.historic_particles
+    ancestry = filter.ancestry
+    i_anc = -1
+
+    trajectory = Array{Float64,2}(undef, state_dim, T+1)
+
+    trajectory[:, T+1] .= historic_particles[:, trajectory_index, T+1]
+    i_anc = ancestry[trajectory_index, T+1]
+
+    for back in T:(-1):1
+        trajectory[:, back] .= historic_particles[:, i_anc, back]
+        i_anc = ancestry[trajectory_index, back]
+    end
+    return trajectory
+end

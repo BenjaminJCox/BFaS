@@ -313,6 +313,6 @@ end
 # Q_mean = mean(Q_samples, dims = 3)[:,:,1]
 # display(Q_mean)
 
-filter.SSM.ssm_parameters[:a] = 3.0
-
-pmmh_res_a = containers.perform_PMMH_params(filter, param_dist, param_prior_llh, param_step_llh, 1000)
+# filter.SSM.ssm_parameters[:a] = 3.0
+#
+# pmmh_res_a = containers.perform_PMMH_params(filter, param_dist, param_prior_llh, param_step_llh, 1000)
